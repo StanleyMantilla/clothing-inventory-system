@@ -1,4 +1,4 @@
-# Clothing Inventory System
+# Clothing Inventory System BSIT 3-C 
 
 ## 📌 About the Project
 
