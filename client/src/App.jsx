@@ -1,9 +1,11 @@
+
 import { useCallback, useEffect, useState } from "react";
 import Dashboard from "./Dashboard";
 import Sales from "./Sales";
 import Products from "./Products";
 import Users from "./Users";
 import Login from "./Login";
+import AI from "./AI";
 import { useAuth } from "./AuthContext";
 import "./App.css";
 
@@ -14,7 +16,7 @@ function App() {
 
   const isAdmin = user?.role === "admin";
 
-  // Staff starts on Products; administrators start on Dashboard.
+  // Admin starts on Dashboard; staff starts on Products.
   const [activeSection, setActiveSection] = useState(
     isAdmin ? "dashboard" : "products"
   );
@@ -27,7 +29,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Load information for the dashboard and reports.
+  // Load dashboard and report data using the logged-in user's token.
   const loadDashboard = useCallback(async () => {
     if (!token || !user) {
       setLoading(false);
@@ -49,16 +51,14 @@ function App() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(
-          data.message || `Failed to load ${path}`
-        );
+        throw new Error(data.message || `Failed to load ${path}`);
       }
 
       return data;
     }
 
     try {
-      // Products are available to both administrators and staff.
+      // Both roles can access products.
       const productsResult = await fetchData("/api/products");
 
       const productsData = Array.isArray(productsResult)
@@ -67,8 +67,7 @@ function App() {
 
       setProducts(productsData);
 
-      // Only load sales for the dashboard if the account has permission.
-      // The current backend allows administrators to view sales history.
+      // Sales dashboard data is restricted to administrators.
       let salesData = [];
 
       if (isAdmin) {
@@ -85,7 +84,6 @@ function App() {
 
       setSales(salesData);
 
-      // Staff can calculate basic stock totals from products.
       const totalStock = productsData.reduce(
         (total, product) =>
           total + (Number(product.quantity) || 0),
@@ -97,15 +95,12 @@ function App() {
       );
 
       if (isAdmin) {
-        const [inventoryResult, lowStockResult] =
-          await Promise.all([
-            fetchData("/api/reports/inventory"),
-            fetchData("/api/products/low-stock"),
-          ]);
+        const [inventoryResult, lowStockResult] = await Promise.all([
+          fetchData("/api/reports/inventory"),
+          fetchData("/api/products/low-stock"),
+        ]);
 
-        setInventory(
-          inventoryResult.report || inventoryResult
-        );
+        setInventory(inventoryResult.report || inventoryResult);
 
         setLowStock(
           Array.isArray(lowStockResult)
@@ -113,6 +108,7 @@ function App() {
             : lowStockResult.products || []
         );
       } else {
+        // Staff only sees inventory values calculated from products.
         setInventory({
           totalProducts: productsData.length,
           totalStock,
@@ -135,7 +131,7 @@ function App() {
     }
   }, [token, user, isAdmin]);
 
-  // Load dashboard information after authentication finishes.
+  // Load dashboard data after authentication finishes.
   useEffect(() => {
     if (checkingAuth) return;
 
@@ -147,7 +143,7 @@ function App() {
     loadDashboard();
   }, [checkingAuth, token, user, loadDashboard]);
 
-  // Refresh dashboard information after product or sale changes.
+  // Refresh dashboard data when products or sales change.
   useEffect(() => {
     function handleDashboardRefresh() {
       loadDashboard();
@@ -166,13 +162,12 @@ function App() {
     };
   }, [loadDashboard]);
 
-  // Keep the selected page appropriate if the account role changes.
+  // Prevent staff from entering administrator-only sections.
   useEffect(() => {
-    if (!isAdmin && (
-      activeSection === "dashboard" ||
-      activeSection === "reports" ||
-      activeSection === "users"
-    )) {
+    if (
+      !isAdmin &&
+      ["dashboard", "reports", "users"].includes(activeSection)
+    ) {
       setActiveSection("products");
     }
   }, [isAdmin, activeSection]);
@@ -252,7 +247,7 @@ function App() {
           </button>
         )}
 
-        {/* Products: administrators and staff */}
+        {/* Products: both roles */}
         <button
           type="button"
           className={`nav-link ${
@@ -263,7 +258,7 @@ function App() {
           Products
         </button>
 
-        {/* Sales: administrators and staff */}
+        {/* Sales: both roles, subject to backend permissions */}
         <button
           type="button"
           className={`nav-link ${
@@ -272,6 +267,17 @@ function App() {
           onClick={() => navigateTo("sales")}
         >
           Sales
+        </button>
+
+        {/* ClothStock AI: both roles */}
+        <button
+          type="button"
+          className={`nav-link ${
+            activeSection === "ai" ? "active" : ""
+          }`}
+          onClick={() => navigateTo("ai")}
+        >
+          ✨ ClothStock AI
         </button>
 
         {/* Reports: administrator only */}
@@ -309,9 +315,7 @@ function App() {
           <div className="user-details">
             <strong>{user.name || "User"}</strong>
 
-            <span>
-              {isAdmin ? "Administrator" : "Staff"}
-            </span>
+            <span>{isAdmin ? "Administrator" : "Staff"}</span>
           </div>
 
           <button
@@ -338,9 +342,7 @@ function App() {
           <section className="page-section">
             <header className="topbar">
               <div>
-                <p className="breadcrumb">
-                  Workspace / Dashboard
-                </p>
+                <p className="breadcrumb">Workspace / Dashboard</p>
 
                 <h1>Inventory Dashboard</h1>
 
@@ -354,11 +356,7 @@ function App() {
               </div>
             </header>
 
-            {error && (
-              <div className="error-banner">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-banner">{error}</div>}
 
             {loading ? (
               <div className="loading-screen">
@@ -380,9 +378,7 @@ function App() {
           <section className="page-section">
             <header className="topbar">
               <div>
-                <p className="breadcrumb">
-                  Workspace / Products
-                </p>
+                <p className="breadcrumb">Workspace / Products</p>
 
                 <h1>Product Management</h1>
 
@@ -401,9 +397,7 @@ function App() {
           <section className="page-section">
             <header className="topbar">
               <div>
-                <p className="breadcrumb">
-                  Workspace / Sales
-                </p>
+                <p className="breadcrumb">Workspace / Sales</p>
 
                 <h1>Sales Management</h1>
 
@@ -417,14 +411,32 @@ function App() {
           </section>
         )}
 
+        {/* CLOTHSTOCK AI */}
+        {activeSection === "ai" && (
+          <section className="page-section">
+            <header className="topbar">
+              <div>
+                <p className="breadcrumb">Workspace / ClothStock AI</p>
+
+                <h1>ClothStock AI</h1>
+
+                <p className="subtitle">
+                  Ask inventory questions and identify products that
+                  need restocking.
+                </p>
+              </div>
+            </header>
+
+            <AI />
+          </section>
+        )}
+
         {/* REPORTS */}
         {activeSection === "reports" && isAdmin && (
           <section className="page-section">
             <header className="topbar">
               <div>
-                <p className="breadcrumb">
-                  Workspace / Reports
-                </p>
+                <p className="breadcrumb">Workspace / Reports</p>
 
                 <h1>Inventory Reports</h1>
 
@@ -434,16 +446,10 @@ function App() {
               </div>
             </header>
 
-            {error && (
-              <div className="error-banner">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-banner">{error}</div>}
 
             {loading ? (
-              <div className="loading-screen">
-                Updating reports...
-              </div>
+              <div className="loading-screen">Updating reports...</div>
             ) : (
               <>
                 <section className="stats-grid">
@@ -451,9 +457,7 @@ function App() {
                     <div className="stat-heading">
                       <span>Total Products</span>
                     </div>
-
                     <h2>{totalProducts}</h2>
-
                     <p>Products in your inventory</p>
                   </article>
 
@@ -461,9 +465,7 @@ function App() {
                     <div className="stat-heading">
                       <span>Total Stock</span>
                     </div>
-
                     <h2>{totalStock.toLocaleString()}</h2>
-
                     <p>Units currently available</p>
                   </article>
 
@@ -471,9 +473,7 @@ function App() {
                     <div className="stat-heading">
                       <span>Low-Stock Products</span>
                     </div>
-
                     <h2>{lowStockCount}</h2>
-
                     <p>Products needing attention</p>
                   </article>
 
@@ -481,9 +481,7 @@ function App() {
                     <div className="stat-heading">
                       <span>Inventory Cost Value</span>
                     </div>
-
                     <h2>{formatCurrency(costValue)}</h2>
-
                     <p>Estimated cost of current stock</p>
                   </article>
 
@@ -491,9 +489,7 @@ function App() {
                     <div className="stat-heading">
                       <span>Potential Selling Value</span>
                     </div>
-
                     <h2>{formatCurrency(sellingValue)}</h2>
-
                     <p>Estimated value of current inventory</p>
                   </article>
                 </section>
@@ -505,9 +501,7 @@ function App() {
                       <p>Clothing items with limited stock</p>
                     </div>
 
-                    <span className="alert-badge">
-                      {lowStock.length}
-                    </span>
+                    <span className="alert-badge">{lowStock.length}</span>
                   </div>
 
                   <div className="table-wrapper">
@@ -523,11 +517,10 @@ function App() {
 
                       <tbody>
                         {lowStock.map((product) => (
-                          <tr key={product._id}>
+                          <tr key={product._id || product.code}>
                             <td>{product.name}</td>
                             <td>{product.code}</td>
                             <td>{product.category}</td>
-
                             <td>
                               <span className="stock-badge low">
                                 {product.quantity}

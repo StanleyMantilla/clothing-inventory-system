@@ -15,40 +15,18 @@ const {
   authorizeRoles
 } = require("./routes/auth");
 
+const Product = require("./models/Product");
+const Sale = require("./models/Sale");
+const aiRouter = require("./routes/aiRoutes");
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// Authentication and AI routes
 app.use("/api/auth", authRouter);
-
-// Product database structure
-const productSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  code: { type: String, required: true, unique: true },
-  category: { type: String, required: true },
-  size: { type: String, required: true },
-  color: { type: String, required: true },
-  quantity: { type: Number, required: true, min: 0 },
-  costPrice: { type: Number, required: true, min: 0 },
-  sellingPrice: { type: Number, required: true, min: 0 }
-}, { timestamps: true });
-
-// Sales database structure
-const saleSchema = new mongoose.Schema({
-  productId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Product",
-    required: true
-  },
-  quantity: { type: Number, required: true, min: 1 },
-  unitPrice: { type: Number, required: true, min: 0 },
-  totalAmount: { type: Number, required: true, min: 0 },
-  soldAt: { type: Date, default: Date.now }
-});
-
-const Product = mongoose.model("Product", productSchema);
-const Sale = mongoose.model("Sale", saleSchema);
+app.use("/api/ai", aiRouter);
 
 // Test route
 app.get("/", (req, res) => {
@@ -56,202 +34,177 @@ app.get("/", (req, res) => {
 });
 
 // GET all products
-app.get(
-  "/api/products",
-  authenticateToken,
-  async (req, res) => {
+app.get("/api/products", authenticateToken, async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
     res.status(200).json(products);
   } catch (error) {
+    console.error("Retrieve products error:", error.message);
     res.status(500).json({ message: "Failed to retrieve products." });
   }
-  }
-);
+});
 
-// GET low-stock products
+// GET low-stock products (admin only)
 app.get(
   "/api/products/low-stock",
   authenticateToken,
   authorizeRoles("admin"),
   async (req, res) => {
-  try {
-    const threshold = Number(req.query.threshold ?? 5);
+    try {
+      const threshold = Number(req.query.threshold ?? 5);
 
-    if (!Number.isSafeInteger(threshold) || threshold < 0) {
-      return res.status(400).json({
-        message: "Threshold must be a non-negative whole number."
+      if (!Number.isSafeInteger(threshold) || threshold < 0) {
+        return res.status(400).json({
+          message: "Threshold must be a non-negative whole number."
+        });
+      }
+
+      const products = await Product.find({
+        quantity: { $lte: threshold }
+      }).sort({ quantity: 1 });
+
+      res.status(200).json({
+        message: "Low-stock products retrieved successfully!",
+        threshold,
+        count: products.length,
+        products
+      });
+    } catch (error) {
+      console.error("Low-stock error:", error.message);
+      res.status(500).json({
+        message: "Failed to retrieve low-stock products."
       });
     }
-
-    const products = await Product.find({
-      quantity: { $lte: threshold }
-    }).sort({ quantity: 1 });
-
-    res.status(200).json({
-      message: "Low-stock products retrieved successfully!",
-      threshold,
-      count: products.length,
-      products
-    });
-  } catch (error) {
-    console.error("Low-stock error:", error.message);
-
-    res.status(500).json({
-      message: "Failed to retrieve low-stock products."
-    });
-  }
   }
 );
 
-// GET inventory report
+// GET inventory report (admin only)
 app.get(
   "/api/reports/inventory",
   authenticateToken,
   authorizeRoles("admin"),
   async (req, res) => {
-  try {
-    const threshold = Number(req.query.threshold ?? 5);
+    try {
+      const threshold = Number(req.query.threshold ?? 5);
 
-    if (!Number.isSafeInteger(threshold) || threshold < 0) {
-      return res.status(400).json({
-        message: "Threshold must be a non-negative whole number."
-      });
-    }
+      if (!Number.isSafeInteger(threshold) || threshold < 0) {
+        return res.status(400).json({
+          message: "Threshold must be a non-negative whole number."
+        });
+      }
 
-    const report = await Product.aggregate([
-      {
-        $group: {
-          _id: null,
-
-          totalProducts: { $sum: 1 },
-
-          totalStock: { $sum: "$quantity" },
-
-          lowStockProducts: {
-            $sum: {
-              $cond: [
-                { $lte: ["$quantity", threshold] },
-                1,
-                0
-              ]
-            }
-          },
-
-          inventoryCostValue: {
-            $sum: {
-              $multiply: ["$quantity", "$costPrice"]
-            }
-          },
-
-          inventorySellingValue: {
-            $sum: {
-              $multiply: ["$quantity", "$sellingPrice"]
+      const report = await Product.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalProducts: { $sum: 1 },
+            totalStock: { $sum: "$quantity" },
+            lowStockProducts: {
+              $sum: {
+                $cond: [{ $lte: ["$quantity", threshold] }, 1, 0]
+              }
+            },
+            inventoryCostValue: {
+              $sum: { $multiply: ["$quantity", "$costPrice"] }
+            },
+            inventorySellingValue: {
+              $sum: { $multiply: ["$quantity", "$sellingPrice"] }
             }
           }
         }
-      }
-    ]);
+      ]);
 
-    const summary = report[0] || {
-      totalProducts: 0,
-      totalStock: 0,
-      lowStockProducts: 0,
-      inventoryCostValue: 0,
-      inventorySellingValue: 0
-    };
+      const summary = report[0] || {
+        totalProducts: 0,
+        totalStock: 0,
+        lowStockProducts: 0,
+        inventoryCostValue: 0,
+        inventorySellingValue: 0
+      };
 
-    res.status(200).json({
-      message: "Inventory report generated successfully!",
-      threshold,
-      report: summary
-    });
-  } catch (error) {
-    console.error("Inventory report error:", error.message);
-
-    res.status(500).json({
-      message: "Failed to generate inventory report."
-    });
-  }
+      res.status(200).json({
+        message: "Inventory report generated successfully!",
+        threshold,
+        report: summary
+      });
+    } catch (error) {
+      console.error("Inventory report error:", error.message);
+      res.status(500).json({
+        message: "Failed to generate inventory report."
+      });
+    }
   }
 );
 
- // POST: Add a new clothing product
+// POST: Add a new clothing product
 app.post(
   "/api/products",
   authenticateToken,
   authorizeRoles("admin", "staff"),
   async (req, res) => {
-  try {
-    const {
-      name,
-      code,
-      category,
-      size,
-      color,
-      quantity,
-      costPrice,
-      sellingPrice
-    } = req.body;
+    try {
+      const {
+        name,
+        code,
+        category,
+        size,
+        color,
+        quantity,
+        costPrice,
+        sellingPrice
+      } = req.body;
 
-    // Check required fields
-    if (
-      !name || !code || !category || !size || !color ||
-      quantity === undefined ||
-      costPrice === undefined ||
-      sellingPrice === undefined
-    ) {
-      return res.status(400).json({
-        message: "Please complete all product fields."
+      if (
+        !name ||
+        !code ||
+        !category ||
+        !size ||
+        !color ||
+        quantity === undefined ||
+        costPrice === undefined ||
+        sellingPrice === undefined
+      ) {
+        return res.status(400).json({
+          message: "Please complete all product fields."
+        });
+      }
+
+      const newProduct = new Product({
+        name,
+        code,
+        category,
+        size,
+        color,
+        quantity,
+        costPrice,
+        sellingPrice
       });
-    }
 
-    // Create a new product
-    const newProduct = new Product({
-      name,
-      code,
-      category,
-      size,
-      color,
-      quantity,
-      costPrice,
-      sellingPrice
-    }
-  );
+      const savedProduct = await newProduct.save();
 
-    // Save the product to MongoDB
-    const savedProduct = await newProduct.save();
-
-    res.status(201).json({
-      message: "Clothing product added successfully!",
-      product: savedProduct
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        message: "Product code already exists."
+      res.status(201).json({
+        message: "Clothing product added successfully!",
+        product: savedProduct
       });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({
+          message: "Product code already exists."
+        });
+      }
+
+      if (error.name === "ValidationError") {
+        return res.status(400).json({ message: error.message });
+      }
+
+      console.error("Add product error:", error.message);
+      res.status(500).json({ message: "Failed to add product." });
     }
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        message: error.message
-      });
-    }
-
-    console.error("Add product error:", error);
-
-    res.status(500).json({
-      message: "Failed to add product."
-    });
   }
-});
+);
 
 // GET search products by name or code
-app.get(
-  "/api/products/search",
-  authenticateToken,
-  async (req, res) => {
+app.get("/api/products/search", authenticateToken, async (req, res) => {
   try {
     const search = String(req.query.q || "").trim();
 
@@ -270,16 +223,13 @@ app.get(
 
     res.status(200).json(products);
   } catch (error) {
+    console.error("Product search error:", error.message);
     res.status(500).json({ message: "Product search failed." });
   }
-  }
-);
+});
 
 // GET one product by ID
-app.get(
-  "/api/products/:id",
-  authenticateToken,
-  async (req, res) => {
+app.get("/api/products/:id", authenticateToken, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid product ID." });
@@ -293,88 +243,75 @@ app.get(
 
     res.status(200).json(product);
   } catch (error) {
+    console.error("Retrieve product error:", error.message);
     res.status(500).json({ message: "Failed to retrieve product." });
   }
-  }
-);
+});
 
-
- // PUT: Update an existing product
+// PUT: Update an existing product
 app.put(
   "/api/products/:id",
   authenticateToken,
   authorizeRoles("admin", "staff"),
   async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({
-        message: "Invalid product ID."
-      });
-    }
-
-    const allowedFields = [
-      "name",
-      "code",
-      "category",
-      "size",
-      "color",
-      "quantity",
-      "costPrice",
-      "sellingPrice"
-    ];
-
-    const updates = {};
-
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: "Invalid product ID." });
       }
-    }
 
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        message: "Provide at least one field to update."
-      });
-    }
+      const allowedFields = [
+        "name",
+        "code",
+        "category",
+        "size",
+        "color",
+        "quantity",
+        "costPrice",
+        "sellingPrice"
+      ];
 
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      {
-        new: true,
-        runValidators: true
+      const updates = {};
+
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          updates[field] = req.body[field];
+        }
       }
-    );
 
-    if (!product) {
-      return res.status(404).json({
-        message: "Product not found."
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({
+          message: "Provide at least one field to update."
+        });
+      }
+
+      const product = await Product.findByIdAndUpdate(
+        req.params.id,
+        updates,
+        { new: true, runValidators: true }
+      );
+
+      if (!product) {
+        return res.status(404).json({ message: "Product not found." });
+      }
+
+      res.status(200).json({
+        message: "Product updated successfully!",
+        product
       });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({
+          message: "Product code already exists."
+        });
+      }
+
+      if (error.name === "ValidationError") {
+        return res.status(400).json({ message: error.message });
+      }
+
+      console.error("Update product error:", error.message);
+      res.status(500).json({ message: "Failed to update product." });
     }
-
-    res.status(200).json({
-      message: "Product updated successfully!",
-      product
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        message: "Product code already exists."
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        message: error.message
-      });
-    }
-
-    console.error("Update product error:", error);
-
-    res.status(500).json({
-      message: "Failed to update product."
-    });
-  }
   }
 );
 
@@ -384,142 +321,123 @@ app.delete(
   authenticateToken,
   authorizeRoles("admin", "staff"),
   async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({
-        message: "Invalid product ID."
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: "Invalid product ID." });
+      }
+
+      const product = await Product.findById(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({ message: "Product not found." });
+      }
+
+      const hasSales = await Sale.exists({ productId: product._id });
+
+      if (hasSales) {
+        return res.status(409).json({
+          message: "Cannot delete a product with sales history."
+        });
+      }
+
+      await product.deleteOne();
+
+      res.status(200).json({
+        message: "Product deleted successfully!"
       });
+    } catch (error) {
+      console.error("Delete product error:", error.message);
+      res.status(500).json({ message: "Failed to delete product." });
     }
-
-    const product = await Product.findById(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({
-        message: "Product not found."
-      });
-    }
-
-    const hasSales = await Sale.exists({
-      productId: product._id
-    });
-
-    if (hasSales) {
-      return res.status(409).json({
-        message: "Cannot delete a product with sales history."
-      });
-    }
-
-    await product.deleteOne();
-
-    res.status(200).json({
-      message: "Product deleted successfully!"
-    });
-  } catch (error) {
-    console.error("Delete product error:", error);
-
-    res.status(500).json({
-      message: "Failed to delete product."
-    });
-  }
   }
 );
 
-
- // POST: Record a sale and reduce stock
+// POST: Record a sale and reduce stock
 app.post(
   "/api/sales",
   authenticateToken,
   authorizeRoles("admin", "staff"),
   async (req, res) => {
-  try {
-    const { productId, quantity } = req.body;
-
-    if (
-      !mongoose.isValidObjectId(productId) ||
-      !Number.isSafeInteger(quantity) ||
-      quantity < 1
-    ) {
-      return res.status(400).json({
-        message: "Provide a valid product ID and positive whole-number quantity."
-      });
-    }
-
-    const product = await Product.findOneAndUpdate(
-      {
-        _id: productId,
-        quantity: { $gte: quantity }
-      },
-      {
-        $inc: { quantity: -quantity }
-      },
-      { new: true }
-    );
-
-    if (!product) {
-      const exists = await Product.exists({ _id: productId });
-
-      return res.status(exists ? 400 : 404).json({
-        message: exists
-          ? "Insufficient stock."
-          : "Product not found."
-      });
-    }
-
     try {
-      const sale = await Sale.create({
-        productId: product._id,
-        quantity,
-        unitPrice: product.sellingPrice,
-        totalAmount: product.sellingPrice * quantity
-      });
+      const { productId, quantity } = req.body;
 
-      return res.status(201).json({
-        message: "Sale recorded successfully!",
-        sale,
-        remainingStock: product.quantity
-      });
-        } catch (error) {
-      // Attempt to restore stock if saving the sale fails.
-      try {
-        const rollback = await Product.updateOne(
-          {
-            _id: product._id,
-            quantity: { $lte: Number.MAX_SAFE_INTEGER - quantity }
-          },
-          {
-            $inc: { quantity }
-          }
-        );
-
-        if (rollback.modifiedCount !== 1) {
-          console.error(
-            "CRITICAL: Stock restoration did not succeed for product:",
-            product._id.toString()
-          );
-        }
-      } catch (rollbackError) {
-        console.error(
-          "CRITICAL: Stock restoration failed. Manual reconciliation may be required.",
-          {
-            productId: product._id.toString(),
-            saleError: error.message,
-            rollbackError: rollbackError.message
-          }
-        );
+      if (
+        !mongoose.isValidObjectId(productId) ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1
+      ) {
+        return res.status(400).json({
+          message:
+            "Provide a valid product ID and positive whole-number quantity."
+        });
       }
 
-      throw error;
-    }
-  } catch (error) {
-    console.error("Record sale error:", error);
+      const product = await Product.findOneAndUpdate(
+        {
+          _id: productId,
+          quantity: { $gte: quantity }
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true }
+      );
 
-    res.status(500).json({
-      message: "Failed to record sale."
-    });
-  }
+      if (!product) {
+        const exists = await Product.exists({ _id: productId });
+
+        return res.status(exists ? 400 : 404).json({
+          message: exists ? "Insufficient stock." : "Product not found."
+        });
+      }
+
+      try {
+        const sale = await Sale.create({
+          productId: product._id,
+          quantity,
+          unitPrice: product.sellingPrice,
+          totalAmount: product.sellingPrice * quantity
+        });
+
+        return res.status(201).json({
+          message: "Sale recorded successfully!",
+          sale,
+          remainingStock: product.quantity
+        });
+      } catch (error) {
+        // Restore stock if saving the sale fails.
+        try {
+          const rollback = await Product.updateOne(
+            {
+              _id: product._id,
+              quantity: { $lte: Number.MAX_SAFE_INTEGER - quantity }
+            },
+            { $inc: { quantity } }
+          );
+
+          if (rollback.modifiedCount !== 1) {
+            console.error(
+              "CRITICAL: Stock restoration did not succeed for product:",
+              product._id.toString()
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "CRITICAL: Stock restoration failed. Manual reconciliation may be required.",
+            {
+              productId: product._id.toString(),
+              saleError: error.message,
+              rollbackError: rollbackError.message
+            }
+          );
+        }
+
+        throw error;
+      }
+    } catch (error) {
+      console.error("Record sale error:", error.message);
+      res.status(500).json({ message: "Failed to record sale." });
+    }
   }
 );
-
 
 // GET all sales — administrators and staff
 app.get(
@@ -534,11 +452,8 @@ app.get(
 
       res.status(200).json(sales);
     } catch (error) {
-      console.error("Retrieve sales error:", error);
-
-      res.status(500).json({
-        message: "Failed to retrieve sales."
-      });
+      console.error("Retrieve sales error:", error.message);
+      res.status(500).json({ message: "Failed to retrieve sales." });
     }
   }
 );
@@ -549,22 +464,23 @@ app.get(
   authenticateToken,
   authorizeRoles("admin", "staff"),
   async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid sale ID." });
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: "Invalid sale ID." });
+      }
+
+      const sale = await Sale.findById(req.params.id)
+        .populate("productId", "name code");
+
+      if (!sale) {
+        return res.status(404).json({ message: "Sale not found." });
+      }
+
+      res.status(200).json(sale);
+    } catch (error) {
+      console.error("Retrieve sale error:", error.message);
+      res.status(500).json({ message: "Failed to retrieve sale." });
     }
-
-    const sale = await Sale.findById(req.params.id)
-      .populate("productId", "name code");
-
-    if (!sale) {
-      return res.status(404).json({ message: "Sale not found." });
-    }
-
-    res.status(200).json(sale);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to retrieve sale." });
-  }
   }
 );
 
@@ -574,8 +490,6 @@ const PORT = process.env.PORT || 5000;
 async function startServer() {
   try {
     await connectDB();
-
-    // Create the initial administrator if one doesn't exist.
     await createAdmin();
 
     app.listen(PORT, () => {
