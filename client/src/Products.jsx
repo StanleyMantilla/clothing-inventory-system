@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 const API_URL = "http://localhost:5000";
+
+function getAuthHeaders(includeJson = false) {
+  const token = localStorage.getItem("token");
+
+  return {
+    ...(includeJson ? { "Content-Type": "application/json" } : {}),
+    Authorization: `Bearer ${token}`,
+  };
+}
 
 const initialForm = {
   name: "",
@@ -14,6 +24,8 @@ const initialForm = {
 };
 
 function Products() {
+  const { token } = useAuth();
+
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState("");
@@ -31,7 +43,11 @@ function Products() {
         ? `${API_URL}/api/products/search?q=${encodeURIComponent(searchTerm.trim())}`
         : `${API_URL}/api/products`;
 
-      const response = await fetch(endpoint);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -46,13 +62,15 @@ function Products() {
     }
   }
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadProducts(search);
-    }, 300);
+useEffect(() => {
+  if (!token) return;
 
-    return () => clearTimeout(timer);
-  }, [search]);
+  const timer = setTimeout(() => {
+    loadProducts(search);
+  }, 300);
+
+  return () => clearTimeout(timer);
+}, [search, token]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -119,6 +137,7 @@ function Products() {
           method: editingId ? "PUT" : "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(payload),
         }
@@ -160,9 +179,13 @@ function Products() {
     try {
       const response = await fetch(
         `${API_URL}/api/products/${product._id}`,
-        { method: "DELETE" }
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
-
       const data = await response.json();
 
       if (!response.ok) {

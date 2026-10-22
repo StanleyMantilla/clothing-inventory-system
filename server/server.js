@@ -1,14 +1,26 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-require("dotenv").config({ path: __dirname + "/.env" });
+
+require("dotenv").config({
+  path: __dirname + "/.env"
+});
 
 const connectDB = require("./db");
+const createAdmin = require("./createAdmin");
+
+const {
+  router: authRouter,
+  authenticateToken,
+  authorizeRoles
+} = require("./routes/auth");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/auth", authRouter);
 
 // Product database structure
 const productSchema = new mongoose.Schema({
@@ -44,17 +56,25 @@ app.get("/", (req, res) => {
 });
 
 // GET all products
-app.get("/api/products", async (req, res) => {
+app.get(
+  "/api/products",
+  authenticateToken,
+  async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
     res.status(200).json(products);
   } catch (error) {
     res.status(500).json({ message: "Failed to retrieve products." });
   }
-});
+  }
+);
 
 // GET low-stock products
-app.get("/api/products/low-stock", async (req, res) => {
+app.get(
+  "/api/products/low-stock",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
   try {
     const threshold = Number(req.query.threshold ?? 5);
 
@@ -81,10 +101,15 @@ app.get("/api/products/low-stock", async (req, res) => {
       message: "Failed to retrieve low-stock products."
     });
   }
-});
+  }
+);
 
 // GET inventory report
-app.get("/api/reports/inventory", async (req, res) => {
+app.get(
+  "/api/reports/inventory",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
   try {
     const threshold = Number(req.query.threshold ?? 5);
 
@@ -148,10 +173,15 @@ app.get("/api/reports/inventory", async (req, res) => {
       message: "Failed to generate inventory report."
     });
   }
-});
+  }
+);
 
  // POST: Add a new clothing product
-app.post("/api/products", async (req, res) => {
+app.post(
+  "/api/products",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
   try {
     const {
       name,
@@ -186,7 +216,8 @@ app.post("/api/products", async (req, res) => {
       quantity,
       costPrice,
       sellingPrice
-    });
+    }
+  );
 
     // Save the product to MongoDB
     const savedProduct = await newProduct.save();
@@ -217,7 +248,10 @@ app.post("/api/products", async (req, res) => {
 });
 
 // GET search products by name or code
-app.get("/api/products/search", async (req, res) => {
+app.get(
+  "/api/products/search",
+  authenticateToken,
+  async (req, res) => {
   try {
     const search = String(req.query.q || "").trim();
 
@@ -238,10 +272,14 @@ app.get("/api/products/search", async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Product search failed." });
   }
-});
+  }
+);
 
 // GET one product by ID
-app.get("/api/products/:id", async (req, res) => {
+app.get(
+  "/api/products/:id",
+  authenticateToken,
+  async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid product ID." });
@@ -257,11 +295,16 @@ app.get("/api/products/:id", async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Failed to retrieve product." });
   }
-});
+  }
+);
 
 
  // PUT: Update an existing product
-app.put("/api/products/:id", async (req, res) => {
+app.put(
+  "/api/products/:id",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({
@@ -332,10 +375,15 @@ app.put("/api/products/:id", async (req, res) => {
       message: "Failed to update product."
     });
   }
-});
+  }
+);
 
 // DELETE: Remove a product
-app.delete("/api/products/:id", async (req, res) => {
+app.delete(
+  "/api/products/:id",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({
@@ -373,11 +421,16 @@ app.delete("/api/products/:id", async (req, res) => {
       message: "Failed to delete product."
     });
   }
-});
+  }
+);
 
 
  // POST: Record a sale and reduce stock
-app.post("/api/sales", async (req, res) => {
+app.post(
+  "/api/sales",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
   try {
     const { productId, quantity } = req.body;
 
@@ -464,24 +517,38 @@ app.post("/api/sales", async (req, res) => {
       message: "Failed to record sale."
     });
   }
-});
-
-
-// GET all sales
-app.get("/api/sales", async (req, res) => {
-  try {
-    const sales = await Sale.find()
-      .populate("productId", "name code")
-      .sort({ soldAt: -1 });
-
-    res.status(200).json(sales);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to retrieve sales." });
   }
-});
+);
+
+
+// GET all sales — administrators and staff
+app.get(
+  "/api/sales",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
+    try {
+      const sales = await Sale.find()
+        .populate("productId", "name code")
+        .sort({ soldAt: -1 });
+
+      res.status(200).json(sales);
+    } catch (error) {
+      console.error("Retrieve sales error:", error);
+
+      res.status(500).json({
+        message: "Failed to retrieve sales."
+      });
+    }
+  }
+);
 
 // GET one sale by ID
-app.get("/api/sales/:id", async (req, res) => {
+app.get(
+  "/api/sales/:id",
+  authenticateToken,
+  authorizeRoles("admin", "staff"),
+  async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid sale ID." });
@@ -498,17 +565,26 @@ app.get("/api/sales/:id", async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Failed to retrieve sale." });
   }
-});
+  }
+);
 
 // Start the server after connecting to MongoDB
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
-  await connectDB();
+  try {
+    await connectDB();
 
-  app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-  });
+    // Create the initial administrator if one doesn't exist.
+    await createAdmin();
+
+    app.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error.message);
+    process.exitCode = 1;
+  }
 }
 
 startServer();

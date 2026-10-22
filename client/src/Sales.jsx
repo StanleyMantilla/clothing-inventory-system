@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
+
+const API_URL = "http://localhost:5000";
 
 function Sales() {
+  const { token } = useAuth();
+
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
 
   const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState("1");
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -16,61 +22,107 @@ function Sales() {
     (product) => product._id === productId
   );
 
+  const saleQuantity = Number(quantity);
+
   const totalAmount =
-    selectedProduct && Number(quantity) > 0
-      ? selectedProduct.sellingPrice * Number(quantity)
+    selectedProduct &&
+    Number.isInteger(saleQuantity) &&
+    saleQuantity > 0
+      ? Number(selectedProduct.sellingPrice) * saleQuantity
       : 0;
 
   const totalRevenue = sales.reduce(
-    (total, sale) => total + Number(sale.totalAmount || 0),
+    (total, sale) => total + (Number(sale.totalAmount) || 0),
     0
   );
 
-  async function loadData() {
+  const formatCurrency = (amount) =>
+    new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+    }).format(Number(amount) || 0);
+
+  // Make an authenticated API request.
+  const fetchData = useCallback(
+    async (path, options = {}) => {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(options.body
+            ? { "Content-Type": "application/json" }
+            : {}),
+          ...options.headers,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || `Request failed with status ${response.status}`
+        );
+      }
+
+      return data;
+    },
+    [token]
+  );
+
+  // Load products and sales independently.
+  const loadData = useCallback(async () => {
+    if (!token) {
+      setProducts([]);
+      setSales([]);
+      setError("Your session has expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
-    try {
-      const [productsResponse, salesResponse] = await Promise.all([
-        fetch("/api/products"),
-        fetch("/api/sales"),
-      ]);
+    const results = await Promise.allSettled([
+      fetchData("/api/products"),
+      fetchData("/api/sales"),
+    ]);
 
-      const productsData = await productsResponse.json();
-      const salesData = await salesResponse.json();
+    const errors = [];
 
-      if (!productsResponse.ok) {
-        throw new Error(
-          productsData.message || "Failed to load products."
-        );
-      }
+    // Handle product results.
+    if (results[0].status === "fulfilled") {
+      const result = results[0].value;
 
-      if (!salesResponse.ok) {
-        throw new Error(
-          salesData.message || "Failed to load sales."
-        );
-      }
-
-      const productsList = Array.isArray(productsData)
-        ? productsData
-        : productsData.products || [];
-
-      const salesList = Array.isArray(salesData)
-        ? salesData
-        : salesData.sales || [];
-
-      setProducts(productsList);
-      setSales(salesList);
-    } catch (err) {
-      setError(err.message || "Unable to load sales data.");
-    } finally {
-      setLoading(false);
+      setProducts(
+        Array.isArray(result) ? result : result.products ?? []
+      );
+    } else {
+      setProducts([]);
+      errors.push(`Products: ${results[0].reason.message}`);
     }
-  }
+
+    // Handle sales results.
+    if (results[1].status === "fulfilled") {
+      const result = results[1].value;
+
+      setSales(
+        Array.isArray(result) ? result : result.sales ?? []
+      );
+    } else {
+      setSales([]);
+      errors.push(`Sales history: ${results[1].reason.message}`);
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join(" "));
+    }
+
+    setLoading(false);
+  }, [token, fetchData]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -78,27 +130,27 @@ function Sales() {
     setMessage("");
     setError("");
 
-    const saleQuantity = Number(quantity);
+    if (!token) {
+      setError("Your session has expired. Please log in again.");
+      return;
+    }
 
     if (!productId) {
       setError("Please select a product.");
       return;
     }
 
-    if (
-      !Number.isInteger(saleQuantity) ||
-      saleQuantity < 1
-    ) {
+    if (!Number.isSafeInteger(saleQuantity) || saleQuantity < 1) {
       setError("Quantity must be a positive whole number.");
       return;
     }
 
     if (!selectedProduct) {
-      setError("Selected product could not be found.");
+      setError("The selected product could not be found.");
       return;
     }
 
-    if (saleQuantity > selectedProduct.quantity) {
+    if (saleQuantity > Number(selectedProduct.quantity)) {
       setError(
         `Insufficient stock. Only ${selectedProduct.quantity} item(s) are available.`
       );
@@ -108,29 +160,26 @@ function Sales() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/sales", {
+      await fetchData("/api/sales", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           productId,
           quantity: saleQuantity,
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to record sale.");
-      }
-
       setMessage("Sale recorded successfully!");
 
       setProductId("");
-      setQuantity(1);
+      setQuantity("1");
 
+      // Refresh product quantities and sales history.
       await loadData();
+
+      // Notify other sections that inventory has changed.
+      window.dispatchEvent(
+        new Event("clothstock:refresh-dashboard")
+      );
     } catch (err) {
       setError(err.message || "Unable to record sale.");
     } finally {
@@ -138,19 +187,12 @@ function Sales() {
     }
   }
 
-  function formatCurrency(amount) {
-    return new Intl.NumberFormat("en-PH", {
-      style: "currency",
-      currency: "PHP",
-    }).format(Number(amount) || 0);
-  }
-
   function getProductName(sale) {
     if (sale.productId && typeof sale.productId === "object") {
       return sale.productId.name || "Unknown product";
     }
 
-    return "Product";
+    return "Unknown product";
   }
 
   function getProductCode(sale) {
@@ -171,13 +213,6 @@ function Sales() {
 
   return (
     <section className="sales-section">
-      <div className="section-heading">
-        <div>
-          <h2>Sales Management</h2>
-          <p>Record clothing sales and monitor sales history.</p>
-        </div>
-      </div>
-
       {message && (
         <div className="sales-message success-message">
           {message}
@@ -208,12 +243,16 @@ function Sales() {
         <form onSubmit={handleSubmit}>
           <div className="sales-form-grid">
             <div className="form-group">
-              <label htmlFor="sale-product">Select Product</label>
+              <label htmlFor="sale-product">
+                Select Product
+              </label>
 
               <select
                 id="sale-product"
                 value={productId}
-                onChange={(event) => setProductId(event.target.value)}
+                onChange={(event) =>
+                  setProductId(event.target.value)
+                }
                 required
               >
                 <option value="">Choose a product</option>
@@ -222,7 +261,7 @@ function Sales() {
                   <option
                     key={product._id}
                     value={product._id}
-                    disabled={product.quantity < 1}
+                    disabled={Number(product.quantity) < 1}
                   >
                     {product.name} ({product.code}) — Stock:{" "}
                     {product.quantity}
@@ -232,7 +271,9 @@ function Sales() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="sale-quantity">Quantity</label>
+              <label htmlFor="sale-quantity">
+                Quantity
+              </label>
 
               <input
                 id="sale-quantity"
@@ -240,7 +281,9 @@ function Sales() {
                 min="1"
                 step="1"
                 value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
+                onChange={(event) =>
+                  setQuantity(event.target.value)
+                }
                 required
               />
             </div>
@@ -270,7 +313,7 @@ function Sales() {
           <button
             className="primary-button"
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !token || products.length === 0}
           >
             {submitting ? "Recording Sale..." : "Record Sale"}
           </button>
