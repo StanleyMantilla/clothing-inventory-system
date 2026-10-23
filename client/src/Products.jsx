@@ -1,16 +1,8 @@
+
 import { useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 
 const API_URL = "http://localhost:5000";
-
-function getAuthHeaders(includeJson = false) {
-  const token = localStorage.getItem("token");
-
-  return {
-    ...(includeJson ? { "Content-Type": "application/json" } : {}),
-    Authorization: `Bearer ${token}`,
-  };
-}
 
 const initialForm = {
   name: "",
@@ -22,6 +14,10 @@ const initialForm = {
   costPrice: "",
   sellingPrice: "",
 };
+
+function notifyDashboard() {
+  window.dispatchEvent(new Event("clothstock:refresh-dashboard"));
+}
 
 function Products() {
   const { token } = useAuth();
@@ -36,11 +32,19 @@ function Products() {
   const [error, setError] = useState("");
 
   async function loadProducts(searchTerm = "") {
+    if (!token) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setError("");
 
-      const endpoint = searchTerm.trim()
-        ? `${API_URL}/api/products/search?q=${encodeURIComponent(searchTerm.trim())}`
+      const trimmedSearch = searchTerm.trim();
+
+      const endpoint = trimmedSearch
+        ? `${API_URL}/api/products/search?q=${encodeURIComponent(trimmedSearch)}`
         : `${API_URL}/api/products`;
 
       const response = await fetch(endpoint, {
@@ -48,13 +52,16 @@ function Products() {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await response.json();
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to load products.");
       }
 
-      setProducts(Array.isArray(data) ? data : data.products ?? []);
+      setProducts(
+        Array.isArray(data) ? data : data.products ?? []
+      );
     } catch (err) {
       setError(err.message || "Unable to connect to the backend.");
     } finally {
@@ -62,15 +69,19 @@ function Products() {
     }
   }
 
-useEffect(() => {
-  if (!token) return;
+  useEffect(() => {
+    if (!token) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
 
-  const timer = setTimeout(() => {
-    loadProducts(search);
-  }, 300);
+    const timer = setTimeout(() => {
+      loadProducts(search);
+    }, 300);
 
-  return () => clearTimeout(timer);
-}, [search, token]);
+    return () => clearTimeout(timer);
+  }, [search, token]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -107,11 +118,16 @@ useEffect(() => {
 
     document
       .getElementById("product-form")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (saving) return;
 
     setMessage("");
     setError("");
@@ -143,14 +159,16 @@ useEffect(() => {
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to save product.");
       }
 
+      const wasEditing = Boolean(editingId);
+
       setMessage(
-        editingId
+        wasEditing
           ? "Product updated successfully!"
           : "Product added successfully!"
       );
@@ -158,7 +176,9 @@ useEffect(() => {
       setForm(initialForm);
       setEditingId(null);
 
+      // Refresh this table and notify the dashboard.
       await loadProducts(search);
+      notifyDashboard();
     } catch (err) {
       setError(err.message || "Unable to save product.");
     } finally {
@@ -186,7 +206,8 @@ useEffect(() => {
           },
         }
       );
-      const data = await response.json();
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to delete product.");
@@ -200,6 +221,7 @@ useEffect(() => {
       setMessage("Product deleted successfully!");
 
       await loadProducts(search);
+      notifyDashboard();
     } catch (err) {
       setError(err.message || "Unable to delete product.");
     }
@@ -215,7 +237,9 @@ useEffect(() => {
     <section className="products-page">
       <header className="products-heading">
         <div>
-          <p className="products-eyebrow">INVENTORY MANAGEMENT</p>
+          <p className="products-eyebrow">
+            INVENTORY MANAGEMENT
+          </p>
           <h1>Products</h1>
           <p>Manage the clothing products in your inventory.</p>
         </div>
@@ -389,7 +413,9 @@ useEffect(() => {
         {loading ? (
           <p className="products-empty">Loading products...</p>
         ) : products.length === 0 ? (
-          <p className="products-empty">No matching products found.</p>
+          <p className="products-empty">
+            No matching products found.
+          </p>
         ) : (
           <div className="products-table-wrapper">
             <table className="products-table">
@@ -418,7 +444,6 @@ useEffect(() => {
                     <td>{product.quantity}</td>
                     <td>{currency(product.costPrice)}</td>
                     <td>{currency(product.sellingPrice)}</td>
-
                     <td>
                       <div className="product-actions">
                         <button

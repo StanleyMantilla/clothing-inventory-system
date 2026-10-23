@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Dashboard from "./Dashboard";
 import Sales from "./Sales";
 import Products from "./Products";
@@ -10,13 +10,13 @@ import { useAuth } from "./AuthContext";
 import "./App.css";
 
 const API_URL = "http://localhost:5000";
+const REFRESH_EVENT = "clothstock:refresh-dashboard";
 
 function App() {
   const { token, user, logout, checkingAuth } = useAuth();
 
   const isAdmin = user?.role === "admin";
 
-  // Admin starts on Dashboard; staff starts on Products.
   const [activeSection, setActiveSection] = useState(
     isAdmin ? "dashboard" : "products"
   );
@@ -29,109 +29,141 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Load dashboard and report data using the logged-in user's token.
-  const loadDashboard = useCallback(async () => {
-    if (!token || !user) {
-      setLoading(false);
-      return;
-    }
+  // Request tracking prevents stale responses from updating the UI.
+  const requestIdRef = useRef(0);
+  const refreshTimerRef = useRef(null);
+  const hasLoadedRef = useRef(false);
 
-    setLoading(true);
-    setError("");
-
-    const headers = {
-      Authorization: `Bearer ${token}`,
-    };
-
-    async function fetchData(path) {
-      const response = await fetch(`${API_URL}${path}`, {
-        headers,
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.message || `Failed to load ${path}`);
+  const loadDashboard = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!token || !user) {
+        setLoading(false);
+        return;
       }
 
-      return data;
-    }
+      const requestId = ++requestIdRef.current;
+      const isCurrentRequest = () =>
+        requestId === requestIdRef.current;
 
-    try {
-      // Both roles can access products.
-      const productsResult = await fetchData("/api/products");
-
-      const productsData = Array.isArray(productsResult)
-        ? productsResult
-        : productsResult.products || [];
-
-      setProducts(productsData);
-
-      // Sales dashboard data is restricted to administrators.
-      let salesData = [];
-
-      if (isAdmin) {
-        try {
-          const salesResult = await fetchData("/api/sales");
-
-          salesData = Array.isArray(salesResult)
-            ? salesResult
-            : salesResult.sales || [];
-        } catch (salesError) {
-          console.error("Could not load dashboard sales:", salesError);
-        }
+      // Keep the existing UI visible during background refreshes.
+      if (!silent && !hasLoadedRef.current) {
+        setLoading(true);
       }
 
-      setSales(salesData);
+      setError("");
 
-      const totalStock = productsData.reduce(
-        (total, product) =>
-          total + (Number(product.quantity) || 0),
-        0
-      );
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      const localLowStock = productsData.filter(
-        (product) => Number(product.quantity) <= 5
-      );
-
-      if (isAdmin) {
-        const [inventoryResult, lowStockResult] = await Promise.all([
-          fetchData("/api/reports/inventory"),
-          fetchData("/api/products/low-stock"),
-        ]);
-
-        setInventory(inventoryResult.report || inventoryResult);
-
-        setLowStock(
-          Array.isArray(lowStockResult)
-            ? lowStockResult
-            : lowStockResult.products || []
-        );
-      } else {
-        // Staff only sees inventory values calculated from products.
-        setInventory({
-          totalProducts: productsData.length,
-          totalStock,
-          lowStockProducts: localLowStock.length,
-          inventoryCostValue: 0,
-          inventorySellingValue: 0,
+      async function fetchData(path) {
+        const response = await fetch(`${API_URL}${path}`, {
+          headers,
         });
 
-        setLowStock(localLowStock);
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.message || `Failed to load ${path}`);
+        }
+
+        return data;
       }
-    } catch (err) {
-      console.error("Dashboard loading error:", err);
 
-      setError(
-        err.message ||
-          "Could not load dashboard data. Check your connection."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [token, user, isAdmin]);
+      const getArray = (result, key) =>
+        Array.isArray(result) ? result : result?.[key] || [];
 
-  // Load dashboard data after authentication finishes.
+      try {
+        // Fetch independent resources concurrently.
+        const requests = [
+          fetchData("/api/products"),
+        ];
+
+        if (isAdmin) {
+          requests.push(
+            fetchData("/api/sales"),
+            fetchData("/api/reports/inventory"),
+            fetchData("/api/products/low-stock")
+          );
+        }
+
+        const results = await Promise.all(requests);
+
+        // Ignore a response if a newer request has started.
+        if (!isCurrentRequest()) return;
+
+        const productsData = getArray(results[0], "products");
+
+        let salesData = [];
+        let inventoryData;
+        let lowStockData;
+
+        const totalStock = productsData.reduce(
+          (total, product) =>
+            total + (Number(product.quantity) || 0),
+          0
+        );
+
+        const localLowStock = productsData.filter(
+          (product) => Number(product.quantity) <= 5
+        );
+
+        if (isAdmin) {
+          salesData = getArray(results[1], "sales");
+
+          const inventoryResult = results[2];
+          inventoryData =
+            inventoryResult?.report || inventoryResult;
+
+          lowStockData = getArray(results[3], "products");
+        } else {
+          // Staff receives no admin-only sales or report requests.
+          inventoryData = {
+            totalProducts: productsData.length,
+            totalStock,
+            lowStockProducts: localLowStock.length,
+            inventoryCostValue: 0,
+            inventorySellingValue: 0,
+          };
+
+          lowStockData = localLowStock;
+        }
+
+        // Update the related state together after successful fetching.
+        setProducts(productsData);
+        setSales(salesData);
+        setInventory(inventoryData);
+        setLowStock(lowStockData);
+
+        hasLoadedRef.current = true;
+        setError("");
+      } catch (err) {
+        if (!isCurrentRequest()) return;
+
+        console.error("Dashboard loading error:", err);
+
+        setError(
+          err.message ||
+            "Could not load dashboard data. Check your connection."
+        );
+      } finally {
+        if (isCurrentRequest()) {
+          setLoading(false);
+        }
+      }
+    },
+    [token, user, isAdmin]
+  );
+
+  // Reset request state when the signed-in account changes.
+  useEffect(() => {
+    requestIdRef.current += 1;
+    hasLoadedRef.current = false;
+    setLoading(true);
+    setError("");
+  }, [token, user?._id, user?.id, user?.role]);
+
+  // Initial load after authentication has finished.
   useEffect(() => {
     if (checkingAuth) return;
 
@@ -143,26 +175,37 @@ function App() {
     loadDashboard();
   }, [checkingAuth, token, user, loadDashboard]);
 
-  // Refresh dashboard data when products or sales change.
+  // Debounce refresh events to avoid duplicate fetch bursts.
   useEffect(() => {
+    if (checkingAuth || !token || !user) return;
+
     function handleDashboardRefresh() {
-      loadDashboard();
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        loadDashboard({ silent: true });
+      }, 150);
     }
 
-    window.addEventListener(
-      "clothstock:refresh-dashboard",
-      handleDashboardRefresh
-    );
+    window.addEventListener(REFRESH_EVENT, handleDashboardRefresh);
 
     return () => {
       window.removeEventListener(
-        "clothstock:refresh-dashboard",
+        REFRESH_EVENT,
         handleDashboardRefresh
       );
-    };
-  }, [loadDashboard]);
 
-  // Prevent staff from entering administrator-only sections.
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [checkingAuth, token, user, loadDashboard]);
+
+  // Keep staff out of administrator-only sections.
   useEffect(() => {
     if (
       !isAdmin &&
@@ -221,11 +264,9 @@ function App() {
 
   return (
     <div className="app">
-      {/* SIDEBAR */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">C</div>
-
           <div>
             <h2>ClothStock</h2>
             <p>Inventory System</p>
@@ -234,7 +275,6 @@ function App() {
 
         <p className="menu-label">MAIN MENU</p>
 
-        {/* Dashboard: administrator only */}
         {isAdmin && (
           <button
             type="button"
@@ -247,7 +287,6 @@ function App() {
           </button>
         )}
 
-        {/* Products: both roles */}
         <button
           type="button"
           className={`nav-link ${
@@ -258,7 +297,6 @@ function App() {
           Products
         </button>
 
-        {/* Sales: both roles, subject to backend permissions */}
         <button
           type="button"
           className={`nav-link ${
@@ -269,7 +307,6 @@ function App() {
           Sales
         </button>
 
-        {/* ClothStock AI: both roles */}
         <button
           type="button"
           className={`nav-link ${
@@ -280,7 +317,6 @@ function App() {
           ✨ ClothStock AI
         </button>
 
-        {/* Reports: administrator only */}
         {isAdmin && (
           <button
             type="button"
@@ -293,7 +329,6 @@ function App() {
           </button>
         )}
 
-        {/* User Management: administrator only */}
         {isAdmin && (
           <button
             type="button"
@@ -306,7 +341,6 @@ function App() {
           </button>
         )}
 
-        {/* Logged-in user */}
         <div className="user-panel">
           <div className="user-avatar">
             {(user.name || "U").charAt(0).toUpperCase()}
@@ -314,7 +348,6 @@ function App() {
 
           <div className="user-details">
             <strong>{user.name || "User"}</strong>
-
             <span>{isAdmin ? "Administrator" : "Staff"}</span>
           </div>
 
@@ -327,7 +360,6 @@ function App() {
           </button>
         </div>
 
-        {/* Backend status */}
         <div className="sidebar-footer">
           <span className="status-dot"></span>
           Backend connection
@@ -335,17 +367,13 @@ function App() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="main-content">
-        {/* DASHBOARD */}
         {activeSection === "dashboard" && isAdmin && (
           <section className="page-section">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Dashboard</p>
-
                 <h1>Inventory Dashboard</h1>
-
                 <p className="subtitle">
                   Welcome back! Here&apos;s your clothing store overview.
                 </p>
@@ -373,73 +401,58 @@ function App() {
           </section>
         )}
 
-        {/* PRODUCTS */}
         {activeSection === "products" && (
           <section className="page-section">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Products</p>
-
                 <h1>Product Management</h1>
-
                 <p className="subtitle">
                   Add, edit, delete, and manage clothing products.
                 </p>
               </div>
             </header>
-
             <Products />
           </section>
         )}
 
-        {/* SALES */}
         {activeSection === "sales" && (
           <section className="page-section">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Sales</p>
-
                 <h1>Sales Management</h1>
-
                 <p className="subtitle">
                   Record sales and review transaction history.
                 </p>
               </div>
             </header>
-
             <Sales />
           </section>
         )}
 
-        {/* CLOTHSTOCK AI */}
         {activeSection === "ai" && (
           <section className="page-section">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / ClothStock AI</p>
-
                 <h1>ClothStock AI</h1>
-
                 <p className="subtitle">
                   Ask inventory questions and identify products that
                   need restocking.
                 </p>
               </div>
             </header>
-
             <AI />
           </section>
         )}
 
-        {/* REPORTS */}
         {activeSection === "reports" && isAdmin && (
           <section className="page-section">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Reports</p>
-
                 <h1>Inventory Reports</h1>
-
                 <p className="subtitle">
                   Review inventory valuation and stock levels.
                 </p>
@@ -500,7 +513,6 @@ function App() {
                       <h2>Low-Stock Products</h2>
                       <p>Clothing items with limited stock</p>
                     </div>
-
                     <span className="alert-badge">{lowStock.length}</span>
                   </div>
 
@@ -514,7 +526,6 @@ function App() {
                           <th>QUANTITY</th>
                         </tr>
                       </thead>
-
                       <tbody>
                         {lowStock.map((product) => (
                           <tr key={product._id || product.code}>
@@ -545,7 +556,6 @@ function App() {
           </section>
         )}
 
-        {/* USER MANAGEMENT */}
         {activeSection === "users" && isAdmin && (
           <section className="page-section">
             <header className="topbar">
@@ -553,15 +563,12 @@ function App() {
                 <p className="breadcrumb">
                   Workspace / User Management
                 </p>
-
                 <h1>User Management</h1>
-
                 <p className="subtitle">
                   Manage administrator and staff accounts.
                 </p>
               </div>
             </header>
-
             <Users />
           </section>
         )}

@@ -1,3 +1,4 @@
+
 import { useMemo } from "react";
 import {
   ResponsiveContainer,
@@ -15,110 +16,245 @@ import {
   Legend,
 } from "recharts";
 
-const COLORS = [
-  "#16734a",
-  "#399b70",
-  "#70b995",
-  "#e5aa45",
-  "#5588c8",
-  "#8c78cc",
-];
+const COLORS = ["#176b45", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"];
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(amount) || 0);
+const currencyFormatter = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  maximumFractionDigits: 2,
+});
+
+function formatCurrency(value) {
+  return currencyFormatter.format(Number(value) || 0);
 }
 
-function Dashboard({
+function getProductId(value) {
+  if (!value) return "";
+
+  if (typeof value === "object") {
+    return String(value._id || value.id || "");
+  }
+
+  return String(value);
+}
+
+function getSaleDate(sale) {
+  const possibleDates = [
+    sale?.soldAt,
+    sale?.createdAt,
+    sale?.saleDate,
+    sale?.date,
+    sale?.timestamp,
+    sale?.updatedAt,
+  ];
+
+  for (const value of possibleDates) {
+    if (!value) continue;
+
+    const date = new Date(value);
+
+    if (!Number.isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  // Use the MongoDB ObjectId timestamp as a fallback.
+  const id = String(sale?._id || "");
+
+  if (/^[a-f\d]{24}$/i.test(id)) {
+    const date = new Date(
+      Number.parseInt(id.slice(0, 8), 16) * 1000
+    );
+
+    if (!Number.isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  return null;
+}
+
+function formatDate(value) {
+  if (!value) return "Date unavailable";
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
+
+  return date.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function EmptyState({ children = "No data available yet." }) {
+  return <div className="chart-empty">{children}</div>;
+}
+
+function SummaryCard({ label, value, detail, icon }) {
+  return (
+    <article className="dashboard-stat-card">
+      <div className="dashboard-stat-top">
+        <span className="dashboard-stat-label">{label}</span>
+        <span className="dashboard-stat-icon" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+
+      <div className="dashboard-stat-value">{value}</div>
+
+      {detail && (
+        <div className="dashboard-stat-detail">{detail}</div>
+      )}
+    </article>
+  );
+}
+
+export default function Dashboard({
   products = [],
   sales = [],
   inventory = {},
   lowStock = [],
 }) {
-  // Prepare sales data by calendar date.
-  const chartData = useMemo(() => {
-    const dailySales = new Map();
+  const safeProducts = Array.isArray(products) ? products : [];
+  const safeSales = Array.isArray(sales) ? sales : [];
+  const safeLowStock = Array.isArray(lowStock) ? lowStock : [];
 
-    sales.forEach((sale) => {
-      if (!sale.soldAt) return;
+  const summary = useMemo(() => {
+    const totalProducts = safeProducts.length;
 
-      const date = new Date(sale.soldAt);
+    const totalStock = safeProducts.reduce(
+      (sum, product) =>
+        sum + (Number(product.quantity) || 0),
+      0
+    );
 
-      if (Number.isNaN(date.getTime())) return;
+    const totalRevenue = safeSales.reduce(
+      (sum, sale) =>
+        sum + (Number(sale.totalAmount) || 0),
+      0
+    );
 
-      const key = [
+    const inventoryCost = safeProducts.reduce(
+      (sum, product) =>
+        sum +
+        (Number(product.quantity) || 0) *
+          (Number(product.costPrice) || 0),
+      0
+    );
+
+    const inventorySellingValue = safeProducts.reduce(
+      (sum, product) =>
+        sum +
+        (Number(product.quantity) || 0) *
+          (Number(product.sellingPrice) || 0),
+      0
+    );
+
+    return {
+      totalProducts,
+      totalStock,
+      lowStockCount: safeLowStock.length,
+      totalRevenue,
+      inventoryCost,
+      inventorySellingValue,
+    };
+  }, [safeProducts, safeSales, safeLowStock]);
+
+  const salesChartData = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const days = [];
+
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - offset);
+
+      const dateKey = [
         date.getFullYear(),
         String(date.getMonth() + 1).padStart(2, "0"),
         String(date.getDate()).padStart(2, "0"),
       ].join("-");
 
-      if (!dailySales.has(key)) {
-        dailySales.set(key, {
-          key,
-          date: date.toLocaleDateString("en-PH", {
-            month: "short",
-            day: "numeric",
-          }),
-          revenue: 0,
-          transactions: 0,
-        });
+      days.push({
+        dateKey,
+        day: date.toLocaleDateString("en-PH", {
+          weekday: "short",
+        }),
+        revenue: 0,
+        transactions: 0,
+      });
+    }
+
+    const daysByKey = new Map(
+      days.map((day) => [day.dateKey, day])
+    );
+
+    safeSales.forEach((sale) => {
+      const date = getSaleDate(sale);
+      if (!date) return;
+
+      const dateKey = [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      const day = daysByKey.get(dateKey);
+
+      if (day) {
+        day.revenue += Number(sale.totalAmount) || 0;
+        day.transactions += 1;
       }
-
-      const day = dailySales.get(key);
-
-      day.revenue += Number(sale.totalAmount) || 0;
-      day.transactions += 1;
     });
 
-    return Array.from(dailySales.values())
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .slice(-7);
-  }, [sales]);
+    return days;
+  }, [safeSales]);
 
-  // Rank products by the quantity sold.
   const topProducts = useMemo(() => {
-    const productSales = new Map();
+    const totals = new Map();
 
-    sales.forEach((sale) => {
-      const product = sale.productId;
+    safeSales.forEach((sale) => {
+      const productId = getProductId(sale.productId);
 
-      const productId =
-        product && typeof product === "object"
-          ? String(product._id || product.id || product.name)
-          : String(product || "");
+      const populatedName =
+        typeof sale.productId === "object"
+          ? sale.productId?.name
+          : "";
 
-      const productName =
-        product && typeof product === "object"
-          ? product.name || "Unknown product"
-          : products.find(
-              (item) => String(item._id) === productId
-            )?.name || "Unknown product";
+      const product = safeProducts.find(
+        (item) => getProductId(item._id) === productId
+      );
 
-      if (!productSales.has(productId)) {
-        productSales.set(productId, {
-          name: productName,
-          quantity: 0,
-        });
-      }
+      const name =
+        populatedName ||
+        product?.name ||
+        sale.productName ||
+        "Unknown product";
 
-      productSales.get(productId).quantity +=
-        Number(sale.quantity) || 0;
+      const key = productId || name;
+      const existing = totals.get(key) || {
+        name,
+        quantity: 0,
+      };
+
+      existing.quantity += Number(sale.quantity) || 0;
+      totals.set(key, existing);
     });
 
-    return Array.from(productSales.values())
+    return Array.from(totals.values())
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
-  }, [sales, products]);
+  }, [safeSales, safeProducts]);
 
-  // Group current inventory by category.
   const categoryData = useMemo(() => {
     const categories = new Map();
 
-    products.forEach((product) => {
+    safeProducts.forEach((product) => {
       const category = product.category || "Uncategorized";
       const quantity = Number(product.quantity) || 0;
 
@@ -128,176 +264,184 @@ function Dashboard({
       );
     });
 
-    return Array.from(categories.entries())
-      .map(([name, stock]) => ({ name, stock }))
-      .filter((category) => category.stock > 0)
-      .sort((a, b) => b.stock - a.stock);
-  }, [products]);
+    return Array.from(categories, ([name, value]) => ({
+      name,
+      value,
+    })).filter((item) => item.value > 0);
+  }, [safeProducts]);
 
-  const totalProducts =
-    inventory?.totalProducts ?? products.length;
+  const recentSales = useMemo(() => {
+    return safeSales
+      .map((sale) => ({
+        ...sale,
+        dashboardDate: getSaleDate(sale),
+      }))
+      .sort((a, b) => {
+        return (
+          (b.dashboardDate?.getTime() || 0) -
+          (a.dashboardDate?.getTime() || 0)
+        );
+      })
+      .slice(0, 5);
+  }, [safeSales]);
 
-  const totalStock =
-    inventory?.totalStock ??
-    products.reduce(
-      (total, product) =>
-        total + (Number(product.quantity) || 0),
-      0
+  function productNameForSale(sale) {
+    if (
+      sale.productId &&
+      typeof sale.productId === "object" &&
+      sale.productId.name
+    ) {
+      return sale.productId.name;
+    }
+
+    const productId = getProductId(sale.productId);
+
+    const product = safeProducts.find(
+      (item) => getProductId(item._id) === productId
     );
 
-  const lowStockCount =
-    inventory?.lowStockProducts ?? lowStock.length;
-
-  const totalRevenue = sales.reduce(
-    (total, sale) =>
-      total + (Number(sale.totalAmount) || 0),
-    0
-  );
-
-  const statistics = [
-    {
-      title: "Total Products",
-      value: totalProducts.toLocaleString(),
-      description: "Products registered",
-      accent: "green",
-    },
-    {
-      title: "Total Stock",
-      value: totalStock.toLocaleString(),
-      description: "Units currently available",
-      accent: "blue",
-    },
-    {
-      title: "Low-Stock Products",
-      value: lowStockCount.toLocaleString(),
-      description: "Products needing attention",
-      accent: "orange",
-    },
-    {
-      title: "Total Recorded Revenue",
-      value: formatCurrency(totalRevenue),
-      description: "Revenue from loaded sales records",
-      accent: "purple",
-    },
-  ];
+    return (
+      product?.name ||
+      sale.productName ||
+      "Unknown product"
+    );
+  }
 
   return (
-    <section className="dashboard-content">
-      {/* SUMMARY CARDS */}
-      <div className="dashboard-stats">
-        {statistics.map((stat) => (
-          <article
-            className={`dashboard-stat-card ${stat.accent}`}
-            key={stat.title}
-          >
-            <span className="dashboard-stat-label">
-              {stat.title}
-            </span>
+    <div className="dashboard-content">
+      <div className="dashboard-page-heading">
+        <div>
+          <h2>Dashboard Overview</h2>
+          <p>
+            Monitor your clothing inventory and sales performance.
+          </p>
+        </div>
 
-            <h2>{stat.value}</h2>
-
-            <p>{stat.description}</p>
-          </article>
-        ))}
+        <div className="dashboard-date-label">
+          {new Date().toLocaleDateString("en-PH", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </div>
       </div>
 
-      {/* CHARTS */}
-      <div className="dashboard-charts">
-        {/* SALES OVERVIEW */}
+      <section className="dashboard-stats">
+        <SummaryCard
+          label="Total Products"
+          value={summary.totalProducts.toLocaleString("en-PH")}
+          detail="Different product entries"
+          icon="▦"
+        />
+
+        <SummaryCard
+          label="Total Stock"
+          value={summary.totalStock.toLocaleString("en-PH")}
+          detail="Units currently recorded"
+          icon="▤"
+        />
+
+        <SummaryCard
+          label="Low-Stock Items"
+          value={summary.lowStockCount.toLocaleString("en-PH")}
+          detail="Products needing attention"
+          icon="!"
+        />
+
+        <SummaryCard
+          label="Recorded Revenue"
+          value={formatCurrency(summary.totalRevenue)}
+          detail={`${safeSales.length} recorded sales`}
+          icon="₱"
+        />
+      </section>
+
+      <section className="dashboard-kpi-row">
+        <div className="dashboard-kpi-card">
+          <span>Inventory Cost Value</span>
+          <strong>{formatCurrency(summary.inventoryCost)}</strong>
+          <small>Current stock × cost price</small>
+        </div>
+
+        <div className="dashboard-kpi-card">
+          <span>Potential Selling Value</span>
+          <strong>
+            {formatCurrency(summary.inventorySellingValue)}
+          </strong>
+          <small>Current stock × selling price</small>
+        </div>
+
+        <div className="dashboard-kpi-card">
+          <span>Recorded Transactions</span>
+          <strong>{safeSales.length.toLocaleString("en-PH")}</strong>
+          <small>Sales entries in the system</small>
+        </div>
+      </section>
+
+      <section className="dashboard-charts">
         <article className="dashboard-chart-card">
           <div className="dashboard-chart-heading">
             <div>
               <h3>Sales Overview</h3>
-              <p>Revenue from available sales records</p>
+              <p>Recorded revenue over the last 7 days</p>
             </div>
-
-            <span className="chart-label">Revenue</span>
           </div>
 
           <div className="dashboard-chart-area">
-            {chartData.length > 0 ? (
+            {salesChartData.some((day) => day.revenue > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={chartData}
-                  margin={{
-                    top: 12,
-                    right: 12,
-                    left: 8,
-                    bottom: 5,
-                  }}
+                  data={salesChartData}
+                  margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
                 >
                   <CartesianGrid
-                    stroke="#e8eee9"
-                    strokeDasharray="4 4"
+                    strokeDasharray="3 3"
                     vertical={false}
                   />
-
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: "#718078", fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={{ stroke: "#dfe8e1" }}
-                  />
-
+                  <XAxis dataKey="day" />
                   <YAxis
-                    width={75}
-                    tick={{ fill: "#718078", fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
+                    width={65}
                     tickFormatter={(value) =>
-                      `₱${Number(value).toLocaleString("en-PH")}`
+                      value >= 1000
+                        ? `₱${(value / 1000).toFixed(1)}k`
+                        : `₱${value}`
                     }
                   />
-
                   <Tooltip
-                    formatter={(value) => [
-                      formatCurrency(value),
-                      "Revenue",
+                    formatter={(value, name) => [
+                      name === "Revenue"
+                        ? formatCurrency(value)
+                        : value,
+                      name,
                     ]}
-                    contentStyle={{
-                      borderRadius: 10,
-                      border: "1px solid #e1eae3",
-                      fontSize: 12,
-                    }}
                   />
-
+                  <Legend />
                   <Line
                     type="monotone"
                     dataKey="revenue"
                     name="Revenue"
-                    stroke="#16734a"
+                    stroke="#176b45"
                     strokeWidth={3}
-                    dot={{
-                      r: 4,
-                      fill: "#16734a",
-                      strokeWidth: 2,
-                      stroke: "#ffffff",
-                    }}
+                    dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="chart-empty">
-                <span className="chart-empty-icon">↗</span>
-                <strong>No sales data yet</strong>
-                <p>
-                  Record a sale to start tracking daily revenue.
-                </p>
-              </div>
+              <EmptyState>
+                No dated sales found for the last 7 days.
+              </EmptyState>
             )}
           </div>
         </article>
 
-        {/* TOP-SELLING PRODUCTS */}
         <article className="dashboard-chart-card">
           <div className="dashboard-chart-heading">
             <div>
               <h3>Top-Selling Products</h3>
-              <p>Products ranked by quantity sold</p>
+              <p>Products ranked by units sold</p>
             </div>
-
-            <span className="chart-label">Units sold</span>
           </div>
 
           <div className="dashboard-chart-area">
@@ -305,78 +449,40 @@ function Dashboard({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={topProducts}
-                  margin={{
-                    top: 12,
-                    right: 12,
-                    left: -10,
-                    bottom: 5,
-                  }}
+                  layout="vertical"
+                  margin={{ top: 8, right: 18, left: 12, bottom: 8 }}
                 >
                   <CartesianGrid
-                    stroke="#e8eee9"
-                    strokeDasharray="4 4"
-                    vertical={false}
+                    strokeDasharray="3 3"
+                    horizontal={false}
                   />
-
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#718078", fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={{ stroke: "#dfe8e1" }}
-                    interval={0}
-                    tickFormatter={(value) =>
-                      value.length > 12
-                        ? `${value.slice(0, 12)}…`
-                        : value
-                    }
-                  />
-
+                  <XAxis type="number" allowDecimals={false} />
                   <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: "#718078", fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
+                    type="category"
+                    dataKey="name"
+                    width={100}
+                    tick={{ fontSize: 11 }}
                   />
-
-                  <Tooltip
-                    formatter={(value) => [
-                      `${value} units`,
-                      "Quantity sold",
-                    ]}
-                    contentStyle={{
-                      borderRadius: 10,
-                      border: "1px solid #e1eae3",
-                      fontSize: 12,
-                    }}
-                  />
-
+                  <Tooltip />
                   <Bar
                     dataKey="quantity"
                     name="Units Sold"
-                    fill="#399b70"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={54}
+                    fill="#176b45"
+                    radius={[0, 5, 5, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="chart-empty">
-                <span className="chart-empty-icon">▥</span>
-                <strong>No product sales yet</strong>
-                <p>
-                  Products will appear here after sales are recorded.
-                </p>
-              </div>
+              <EmptyState>No sales recorded yet.</EmptyState>
             )}
           </div>
         </article>
 
-        {/* INVENTORY DISTRIBUTION */}
         <article className="dashboard-chart-card inventory-chart-card">
           <div className="dashboard-chart-heading">
             <div>
-              <h3>Inventory Distribution</h3>
-              <p>Current stock by product category</p>
+              <h3>Inventory by Category</h3>
+              <p>Current stock distribution</p>
             </div>
           </div>
 
@@ -386,61 +492,132 @@ function Dashboard({
                 <PieChart>
                   <Pie
                     data={categoryData}
-                    dataKey="stock"
+                    dataKey="value"
                     nameKey="name"
                     cx="50%"
-                    cy="45%"
-                    innerRadius={55}
+                    cy="50%"
                     outerRadius={90}
+                    innerRadius={48}
                     paddingAngle={3}
-                    labelLine={false}
+                    label={({ name, percent }) =>
+                      `${name} ${((percent || 0) * 100).toFixed(0)}%`
+                    }
                   >
                     {categoryData.map((entry, index) => (
                       <Cell
                         key={entry.name}
                         fill={COLORS[index % COLORS.length]}
-                        stroke="#ffffff"
-                        strokeWidth={2}
                       />
                     ))}
                   </Pie>
-
-                  <Tooltip
-                    formatter={(value) => [
-                      `${Number(value).toLocaleString()} units`,
-                      "Current stock",
-                    ]}
-                    contentStyle={{
-                      borderRadius: 10,
-                      border: "1px solid #e1eae3",
-                      fontSize: 12,
-                    }}
-                  />
-
-                  <Legend
-                    verticalAlign="bottom"
-                    align="center"
-                    wrapperStyle={{
-                      fontSize: 11,
-                      paddingTop: 12,
-                    }}
-                  />
+                  <Tooltip />
+                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="chart-empty">
-                <span className="chart-empty-icon">◉</span>
-                <strong>No inventory data yet</strong>
-                <p>
-                  Add products with available stock to see the distribution.
-                </p>
-              </div>
+              <EmptyState>
+                No stock available to display.
+              </EmptyState>
             )}
           </div>
         </article>
-      </div>
-    </section>
+      </section>
+
+      <section className="dashboard-bottom-grid">
+        <article className="dashboard-table-card">
+          <div className="dashboard-table-heading">
+            <div>
+              <h3>Low-Stock Alerts</h3>
+              <p>Products that may need restocking</p>
+            </div>
+
+            <span className="dashboard-count-pill">
+              {safeLowStock.length}
+            </span>
+          </div>
+
+          {safeLowStock.length > 0 ? (
+            <div className="dashboard-table-scroll">
+              <table className="dashboard-data-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {safeLowStock.slice(0, 5).map((product, index) => (
+                    <tr key={product._id || product.code || index}>
+                      <td>
+                        <strong>
+                          {product.name || "Unnamed product"}
+                        </strong>
+                        <small>
+                          {product.code || "No product code"}
+                        </small>
+                      </td>
+                      <td>{product.category || "Uncategorized"}</td>
+                      <td>
+                        <span className="dashboard-stock-warning">
+                          {Number(product.quantity) || 0} left
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState>No low-stock products reported.</EmptyState>
+          )}
+        </article>
+
+        <article className="dashboard-table-card">
+          <div className="dashboard-table-heading">
+            <div>
+              <h3>Recent Sales</h3>
+              <p>Your latest recorded transactions</p>
+            </div>
+
+            <span className="dashboard-count-pill">
+              {recentSales.length}
+            </span>
+          </div>
+
+          {recentSales.length > 0 ? (
+            <div className="dashboard-table-scroll">
+              <table className="dashboard-data-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentSales.map((sale, index) => (
+                    <tr key={sale._id || index}>
+                      <td>
+                        <strong>{productNameForSale(sale)}</strong>
+                        <small>{formatDate(sale.dashboardDate)}</small>
+                      </td>
+                      <td>{Number(sale.quantity) || 0}</td>
+                      <td>
+                        <strong>
+                          {formatCurrency(sale.totalAmount)}
+                        </strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState>No sales have been recorded yet.</EmptyState>
+          )}
+        </article>
+      </section>
+    </div>
   );
 }
-
-export default Dashboard;

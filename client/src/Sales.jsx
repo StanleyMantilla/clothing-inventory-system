@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 
@@ -8,15 +9,16 @@ function Sales() {
 
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
-
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Keep the same key when retrying the same sale.
+  const [pendingSale, setPendingSale] = useState(null);
 
   const selectedProduct = products.find(
     (product) => product._id === productId
@@ -26,7 +28,7 @@ function Sales() {
 
   const totalAmount =
     selectedProduct &&
-    Number.isInteger(saleQuantity) &&
+    Number.isSafeInteger(saleQuantity) &&
     saleQuantity > 0
       ? Number(selectedProduct.sellingPrice) * saleQuantity
       : 0;
@@ -42,7 +44,6 @@ function Sales() {
       currency: "PHP",
     }).format(Number(amount) || 0);
 
-  // Make an authenticated API request.
   const fetchData = useCallback(
     async (path, options = {}) => {
       const response = await fetch(`${API_URL}${path}`, {
@@ -59,9 +60,12 @@ function Sales() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(
+        const requestError = new Error(
           data.message || `Request failed with status ${response.status}`
         );
+
+        requestError.status = response.status;
+        throw requestError;
       }
 
       return data;
@@ -69,7 +73,6 @@ function Sales() {
     [token]
   );
 
-  // Load products and sales independently.
   const loadData = useCallback(async () => {
     if (!token) {
       setProducts([]);
@@ -89,25 +92,17 @@ function Sales() {
 
     const errors = [];
 
-    // Handle product results.
     if (results[0].status === "fulfilled") {
       const result = results[0].value;
-
-      setProducts(
-        Array.isArray(result) ? result : result.products ?? []
-      );
+      setProducts(Array.isArray(result) ? result : result.products ?? []);
     } else {
       setProducts([]);
       errors.push(`Products: ${results[0].reason.message}`);
     }
 
-    // Handle sales results.
     if (results[1].status === "fulfilled") {
       const result = results[1].value;
-
-      setSales(
-        Array.isArray(result) ? result : result.sales ?? []
-      );
+      setSales(Array.isArray(result) ? result : result.sales ?? []);
     } else {
       setSales([]);
       errors.push(`Sales history: ${results[1].reason.message}`);
@@ -126,6 +121,8 @@ function Sales() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (submitting) return;
 
     setMessage("");
     setError("");
@@ -150,38 +147,58 @@ function Sales() {
       return;
     }
 
-    if (saleQuantity > Number(selectedProduct.quantity)) {
-      setError(
-        `Insufficient stock. Only ${selectedProduct.quantity} item(s) are available.`
-      );
-      return;
+    // Create one key per sale attempt. Reuse it for retries.
+    let saleAttempt = pendingSale;
+
+    if (
+      !saleAttempt ||
+      saleAttempt.productId !== productId ||
+      saleAttempt.quantity !== saleQuantity
+    ) {
+      saleAttempt = {
+        productId,
+        quantity: saleQuantity,
+        key: crypto.randomUUID(),
+      };
+
+      setPendingSale(saleAttempt);
     }
 
+    // Do not block retries based on possibly stale stock data.
+    // The backend checks stock atomically before recording a sale.
     setSubmitting(true);
 
     try {
-      await fetchData("/api/sales", {
+      const result = await fetchData("/api/sales", {
         method: "POST",
+        headers: {
+          "Idempotency-Key": saleAttempt.key,
+        },
         body: JSON.stringify({
-          productId,
-          quantity: saleQuantity,
+          productId: saleAttempt.productId,
+          quantity: saleAttempt.quantity,
         }),
       });
 
-      setMessage("Sale recorded successfully!");
+      setMessage(
+        result.replayed
+          ? "This sale was already recorded. No duplicate sale was created."
+          : "Sale recorded successfully!"
+      );
 
+      setPendingSale(null);
       setProductId("");
       setQuantity("1");
 
-      // Refresh product quantities and sales history.
       await loadData();
 
-      // Notify other sections that inventory has changed.
       window.dispatchEvent(
         new Event("clothstock:refresh-dashboard")
       );
     } catch (err) {
-      setError(err.message || "Unable to record sale.");
+      setError(
+        `${err.message} If the result is uncertain, retry the same sale without changing the product or quantity.`
+      );
     } finally {
       setSubmitting(false);
     }
@@ -243,16 +260,17 @@ function Sales() {
         <form onSubmit={handleSubmit}>
           <div className="sales-form-grid">
             <div className="form-group">
-              <label htmlFor="sale-product">
-                Select Product
-              </label>
+              <label htmlFor="sale-product">Select Product</label>
 
               <select
                 id="sale-product"
                 value={productId}
-                onChange={(event) =>
-                  setProductId(event.target.value)
-                }
+                onChange={(event) => {
+                  setProductId(event.target.value);
+                  setPendingSale(null);
+                  setMessage("");
+                  setError("");
+                }}
                 required
               >
                 <option value="">Choose a product</option>
@@ -271,9 +289,7 @@ function Sales() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="sale-quantity">
-                Quantity
-              </label>
+              <label htmlFor="sale-quantity">Quantity</label>
 
               <input
                 id="sale-quantity"
@@ -281,9 +297,12 @@ function Sales() {
                 min="1"
                 step="1"
                 value={quantity}
-                onChange={(event) =>
-                  setQuantity(event.target.value)
-                }
+                onChange={(event) => {
+                  setQuantity(event.target.value);
+                  setPendingSale(null);
+                  setMessage("");
+                  setError("");
+                }}
                 required
               />
             </div>
