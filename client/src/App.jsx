@@ -14,25 +14,24 @@ const REFRESH_EVENT = "clothstock:refresh-dashboard";
 
 function App() {
   const { token, user, logout, checkingAuth } = useAuth();
-
   const isAdmin = user?.role === "admin";
 
-  const [activeSection, setActiveSection] = useState(
-    isAdmin ? "dashboard" : "products"
-  );
-
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [inventory, setInventory] = useState(null);
   const [lowStock, setLowStock] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Request tracking prevents stale responses from updating the UI.
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef(null);
   const hasLoadedRef = useRef(false);
+
+  // Keep the correct starting page for each role.
+  useEffect(() => {
+    setActiveSection(isAdmin ? "dashboard" : "products");
+  }, [token, user?._id, user?.id, isAdmin]);
 
   const loadDashboard = useCallback(
     async ({ silent = false } = {}) => {
@@ -45,7 +44,6 @@ function App() {
       const isCurrentRequest = () =>
         requestId === requestIdRef.current;
 
-      // Keep the existing UI visible during background refreshes.
       if (!silent && !hasLoadedRef.current) {
         setLoading(true);
       }
@@ -64,7 +62,9 @@ function App() {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(data.message || `Failed to load ${path}`);
+          throw new Error(
+            data.message || `Failed to load ${path}`
+          );
         }
 
         return data;
@@ -74,11 +74,10 @@ function App() {
         Array.isArray(result) ? result : result?.[key] || [];
 
       try {
-        // Fetch independent resources concurrently.
-        const requests = [
-          fetchData("/api/products"),
-        ];
+        // Products are available to both administrator and staff.
+        const requests = [fetchData("/api/products")];
 
+        // These endpoints are administrator-only.
         if (isAdmin) {
           requests.push(
             fetchData("/api/sales"),
@@ -89,7 +88,6 @@ function App() {
 
         const results = await Promise.all(requests);
 
-        // Ignore a response if a newer request has started.
         if (!isCurrentRequest()) return;
 
         const productsData = getArray(results[0], "products");
@@ -117,7 +115,7 @@ function App() {
 
           lowStockData = getArray(results[3], "products");
         } else {
-          // Staff receives no admin-only sales or report requests.
+          // Do not call administrator-only report or sales endpoints.
           inventoryData = {
             totalProducts: productsData.length,
             totalStock,
@@ -129,7 +127,6 @@ function App() {
           lowStockData = localLowStock;
         }
 
-        // Update the related state together after successful fetching.
         setProducts(productsData);
         setSales(salesData);
         setInventory(inventoryData);
@@ -144,7 +141,7 @@ function App() {
 
         setError(
           err.message ||
-            "Could not load dashboard data. Check your connection."
+            "Could not load data. Please check your backend."
         );
       } finally {
         if (isCurrentRequest()) {
@@ -155,7 +152,7 @@ function App() {
     [token, user, isAdmin]
   );
 
-  // Reset request state when the signed-in account changes.
+  // Reset loading state when the account or session changes.
   useEffect(() => {
     requestIdRef.current += 1;
     hasLoadedRef.current = false;
@@ -163,7 +160,7 @@ function App() {
     setError("");
   }, [token, user?._id, user?.id, user?.role]);
 
-  // Initial load after authentication has finished.
+  // Load data after authentication is ready.
   useEffect(() => {
     if (checkingAuth) return;
 
@@ -175,7 +172,7 @@ function App() {
     loadDashboard();
   }, [checkingAuth, token, user, loadDashboard]);
 
-  // Debounce refresh events to avoid duplicate fetch bursts.
+  // Refresh data when Products or Sales requests a dashboard refresh.
   useEffect(() => {
     if (checkingAuth || !token || !user) return;
 
@@ -205,21 +202,10 @@ function App() {
     };
   }, [checkingAuth, token, user, loadDashboard]);
 
-  // Keep staff out of administrator-only sections.
-  useEffect(() => {
-    if (
-      !isAdmin &&
-      ["dashboard", "reports", "users"].includes(activeSection)
-    ) {
-      setActiveSection("products");
-    }
-  }, [isAdmin, activeSection]);
-
   const navigateTo = (section) => {
-    if (
-      !isAdmin &&
-      ["dashboard", "reports", "users"].includes(section)
-    ) {
+    const adminOnlySections = ["dashboard", "reports", "users"];
+
+    if (!isAdmin && adminOnlySections.includes(section)) {
       setActiveSection("products");
       return;
     }
@@ -375,7 +361,7 @@ function App() {
                 <p className="breadcrumb">Workspace / Dashboard</p>
                 <h1>Inventory Dashboard</h1>
                 <p className="subtitle">
-                  Welcome back! Here&apos;s your clothing store overview.
+                  Welcome back! Here's your clothing store overview.
                 </p>
               </div>
 
@@ -432,17 +418,16 @@ function App() {
         )}
 
         {activeSection === "ai" && (
-          <section className="page-section">
+          <section className="page-section ai-page-section">
             <header className="topbar">
               <div>
-                <p className="breadcrumb">Workspace / ClothStock AI</p>
-                <h1>ClothStock AI</h1>
+                <p className="breadcrumb"></p>
+                <h1></h1>
                 <p className="subtitle">
-                  Ask inventory questions and identify products that
-                  need restocking.
                 </p>
               </div>
             </header>
+
             <AI />
           </section>
         )}
@@ -526,6 +511,7 @@ function App() {
                           <th>QUANTITY</th>
                         </tr>
                       </thead>
+
                       <tbody>
                         {lowStock.map((product) => (
                           <tr key={product._id || product.code}>
