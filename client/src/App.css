@@ -3063,3 +3063,446 @@ tbody tr:hover {
   }
 }
 
+
+/* =========================================================
+   CLOTHSTOCK — ANIMATED COLLAPSIBLE SIDEBAR
+========================================================= */
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 120;
+
+  transform: translateX(0);
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.32s ease;
+
+  visibility: visible;
+  will-change: transform;
+}
+
+.sidebar.sidebar-closed {
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Move the workspace when the desktop sidebar closes. */
+
+.main-content {
+  transition:
+    margin-left 0.32s ease,
+    width 0.32s ease,
+    padding 0.32s ease;
+}
+
+.app.sidebar-is-closed .main-content {
+  width: 100%;
+  margin-left: 0;
+}
+
+/* Hamburger button */
+
+.sidebar-toggle {
+  position: fixed;
+  top: 18px;
+  left: calc(var(--sidebar-width) + 18px);
+  z-index: 150;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+
+  border: 1px solid #dce8df;
+  border-radius: 12px;
+
+  color: #176b45;
+  background: #ffffff;
+  box-shadow: 0 4px 15px rgba(16, 77, 56, 0.12);
+
+  transition:
+    left 0.32s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: #e9f5ee;
+  box-shadow: 0 6px 18px rgba(16, 77, 56, 0.16);
+}
+
+.sidebar-toggle:active {
+  transform: scale(0.96);
+}
+
+.sidebar-toggle span {
+  display: block;
+  width: 20px;
+  height: 2px;
+
+  border-radius: 5px;
+  background: #176b45;
+
+  transform-origin: center;
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s ease,
+    width 0.2s ease;
+}
+
+.sidebar-toggle:hover span:nth-child(2) {
+  width: 14px;
+}
+
+/* Animate hamburger into an X. */
+
+.sidebar-toggle.is-open span:first-child {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.sidebar-toggle.is-open span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.sidebar-toggle.is-open span:last-child {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Closed sidebar: move the hamburger to the left edge. */
+
+.app.sidebar-is-closed .sidebar-toggle {
+  left: 18px;
+}
+
+/* Leave space for the fixed hamburger above page content. */
+
+.main-content {
+  padding-top: 78px;
+}
+
+/* The overlay is only useful on smaller screens. */
+
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: min(290px, 85vw);
+    max-width: 85vw;
+    box-shadow: 12px 0 35px rgba(0, 0, 0, 0.2);
+  }
+
+  .main-content,
+  .app.sidebar-is-closed .main-content {
+    width: 100%;
+    margin-left: 0;
+    padding: 78px 22px 35px;
+  }
+
+  .sidebar-toggle,
+  .app.sidebar-is-closed .sidebar-toggle {
+    top: 16px;
+    left: 16px;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+
+    display: block;
+    width: 100%;
+    height: 100%;
+
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+
+    background: rgba(10, 31, 20, 0.48);
+    cursor: pointer;
+
+    animation: clothstock-overlay-in 0.22s ease both;
+  }
+
+  .sidebar-overlay:active {
+    transform: none;
+  }
+
+  /* Keep the sidebar vertically stacked on mobile. */
+
+  .sidebar .nav-link {
+    display: flex;
+    width: 100%;
+    min-height: 46px;
+    margin: 0 0 6px;
+    font-size: 12px;
+  }
+
+  .sidebar .nav-link.active {
+    box-shadow: inset 3px 0 0 #9ae6bd;
+  }
+
+  .sidebar .user-panel {
+    margin-top: auto;
+  }
+}
+
+@keyframes clothstock-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-toggle,
+  .sidebar-toggle span,
+  .main-content,
+  .sidebar-overlay {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* FIX: MAIN CONTENT WHEN SIDEBAR IS CLOSED */
+
+.app.sidebar-is-closed .sidebar {
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app.sidebar-is-closed .main-content {
+  width: 100% !important;
+  margin-left: 0 !important;
+}
+
+/* Keep the menu button visible */
+.app.sidebar-is-closed .sidebar-toggle {
+  left: 18px;
+  z-index: 150;
+}
+
+/* Mobile layout */
+@media (max-width: 900px) {
+  .app.sidebar-is-closed .main-content {
+    width: 100% !important;
+    margin-left: 0 !important;
+    padding-top: 78px;
+  }
+}
+
+
+/* Hide AI's internal hamburger.
+   The main App.jsx hamburger controls navigation. */
+.ai-page-section .cs-menu-button {
+  display: none !important;
+}
+
+/* Keep the AI workspace aligned with the main application. */
+.ai-page-section {
+  min-width: 0;
+  animation: clothstock-page-enter 0.35s ease both;
+}
+
+@keyframes clothstock-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* Smoother sidebar animation */
+.sidebar {
+  transition:
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.38s ease,
+    box-shadow 0.38s ease;
+  will-change: transform;
+}
+
+.sidebar-toggle {
+  transition:
+    left 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sidebar-toggle span {
+  transition:
+    transform 0.28s ease,
+    opacity 0.2s ease,
+    width 0.2s ease;
+}
+
+.sidebar-overlay {
+  animation: clothstock-overlay-enter 0.25s ease both;
+}
+
+@keyframes clothstock-overlay-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+/* Reusable loading spinner */
+@keyframes clothstock-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes clothstock-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 120px;
+  animation: clothstock-pulse 1.6s ease-in-out infinite;
+}
+
+.loading-screen::before {
+  content: "";
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 3px solid #dcece2;
+  border-top-color: #176b45;
+  border-radius: 50%;
+  animation: clothstock-spin 0.75s linear infinite;
+}
+
+/* ClothStock AI response loading indicator */
+.cs-thinking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: clothstock-pulse 1.4s ease-in-out infinite;
+}
+
+.cs-thinking::after {
+  content: "";
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 2px solid #dcece2;
+  border-top-color: #176b45;
+  border-radius: 50%;
+  animation: clothstock-spin 0.75s linear infinite;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-toggle,
+  .sidebar-toggle span,
+  .sidebar-overlay,
+  .ai-page-section,
+  .loading-screen,
+  .loading-screen::before,
+  .cs-thinking,
+  .cs-thinking::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* CLOTHSTOCK AI — REMOVE THE SECOND HAMBURGER */
+.ai-page-section .cs-ai .cs-tools-menu-button,
+.ai-page-section .cs-ai .cs-menu-button,
+.ai-page-section .cs-ai .cs-sidebar-toggle,
+.ai-page-section .cs-ai .cs-hamburger {
+  display: none !important;
+}
+
+/* Keep the main App.jsx hamburger above the AI interface */
+.app > .sidebar-toggle {
+  display: flex;
+  z-index: 10000;
+}
+
+/* Prevent AI content from covering the main navigation button */
+.ai-page-section {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* CLOTHSTOCK AI — CHAT HISTORY HAMBURGER */
+.ai-page-section .cs-menu-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border: 1px solid #dce8df;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #176b45;
+  font-size: 23px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.ai-page-section .cs-menu-button:hover {
+  background: #edf7f0;
+  transform: translateY(-1px);
+}
+
+/* AI conversation history sidebar */
+.ai-page-section .cs-ai .cs-sidebar {
+  z-index: 10020;
+}
+
+.ai-page-section .cs-ai .cs-sidebar-overlay {
+  z-index: 10010;
+}
+
+.ai-page-section .cs-ai .cs-history {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.ai-page-section .cs-ai .cs-history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-page-section .cs-ai .cs-history-open {
+  min-width: 0;
+  flex: 1;
+}
+
+.ai-page-section .cs-ai .cs-history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

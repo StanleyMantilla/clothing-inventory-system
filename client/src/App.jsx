@@ -17,6 +17,10 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   const [activeSection, setActiveSection] = useState("dashboard");
+
+const [sidebarOpen, setSidebarOpen] = useState(
+  () => window.innerWidth > 900
+);
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [inventory, setInventory] = useState(null);
@@ -203,15 +207,19 @@ function App() {
   }, [checkingAuth, token, user, loadDashboard]);
 
   const navigateTo = (section) => {
-    const adminOnlySections = ["dashboard", "reports", "users"];
+  const adminOnlySections = ["dashboard", "reports", "users"];
 
-    if (!isAdmin && adminOnlySections.includes(section)) {
-      setActiveSection("products");
-      return;
-    }
-
+  if (!isAdmin && adminOnlySections.includes(section)) {
+    setActiveSection("products");
+  } else {
     setActiveSection(section);
-  };
+  }
+
+  // Close the navigation drawer after selecting a page.
+  if (window.innerWidth <= 900) {
+    setSidebarOpen(false);
+  }
+};
 
   const formatCurrency = (amount) =>
     new Intl.NumberFormat("en-PH", {
@@ -249,8 +257,43 @@ function App() {
   const sellingValue = inventory?.inventorySellingValue ?? 0;
 
   return (
-    <div className="app">
-      <aside className="sidebar">
+  <div
+    className={`app ${
+      sidebarOpen ? "sidebar-is-open" : "sidebar-is-closed"
+    }`}
+  >
+    <button
+      type="button"
+      className={`sidebar-toggle ${
+        sidebarOpen ? "is-open" : ""
+      }`}
+      onClick={() => setSidebarOpen((open) => !open)}
+      aria-label={sidebarOpen ? "Close navigation menu" : "Open navigation menu"}
+      aria-expanded={sidebarOpen}
+      aria-controls="clothstock-sidebar"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    {sidebarOpen && (
+      <button
+        type="button"
+        className="sidebar-overlay"
+        aria-label="Close navigation menu"
+        onClick={() => setSidebarOpen(false)}
+      />
+    )}
+
+    
+    <aside
+      id="clothstock-sidebar"
+      className={`sidebar ${
+        sidebarOpen ? "sidebar-open" : "sidebar-closed"
+      }`}
+    >
+
         <div className="brand">
           <div className="brand-icon">C</div>
           <div>
