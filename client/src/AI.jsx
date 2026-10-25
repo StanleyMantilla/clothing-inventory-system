@@ -56,6 +56,14 @@ function normalizeMessage(message, index) {
 
 function AI() {
   const requestInProgressRef = useRef(false);
+  const [chatExpanded, setChatExpanded] = useState(false);
+
+  // Let the sidebar open this floating assistant without mounting a second copy.
+  useEffect(() => {
+    const openAssistant = () => setChatExpanded((open) => !open);
+    window.addEventListener("clothstock:open-ai", openAssistant);
+    return () => window.removeEventListener("clothstock:open-ai", openAssistant);
+  }, []);
 
   const { token, user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -74,9 +82,8 @@ function AI() {
   const [chatMessages, setChatMessages] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== "undefined" && window.innerWidth > 650);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
-  const [appNavOpen, setAppNavOpen] = useState(false);
 
   const [reportLoading, setReportLoading] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
@@ -698,69 +705,65 @@ function AI() {
   }
 
   return (
-    <div className="cs-ai">
-      <button
-        type="button"
-        className={`cs-app-nav-trigger ${appNavOpen ? "is-open" : ""}`}
-        onClick={() => setAppNavOpen((open) => !open)}
-        aria-label={appNavOpen ? "Close main navigation" : "Open main navigation"}
-        aria-expanded={appNavOpen}
-        aria-controls="cs-app-navigation"
+    <div className="cs-ai-float-shell">
+      {!chatExpanded && (
+        <button type="button" className="cs-ai-float-launcher" aria-label="Open ClothStock AI chat" onClick={() => setChatExpanded(true)}>
+          <ClothStockAIAvatar />
+          <span className="cs-ai-float-online" aria-hidden="true" />
+        </button>
+      )}
+      <section className={`cs-ai-float-panel ${chatExpanded ? "is-expanded" : "is-collapsed"}`} aria-hidden={!chatExpanded}>
+        <header className="cs-ai-float-windowbar">
+          <div className="cs-ai-float-windowbrand"><ClothStockAIAvatar /><span><strong>ClothStock AI</strong><small>Inventory Assistant</small></span></div>
+          <div className="cs-ai-float-windowcontrols">
+            <button type="button" aria-label="Minimize chat" title="Minimize" onClick={() => setChatExpanded(false)}>−</button>
+            <button type="button" aria-label="Close chat" title="Close" onClick={() => setChatExpanded(false)}>×</button>
+          </div>
+        </header>
+        <div className="cs-ai-float-content">
+    <style>{`
+      /* Desktop: keep conversation history visible beside the chat. */
+      .cs-ai-float-panel .cs-float-history {
+        position: relative !important;
+        inset: auto !important;
+        flex: 0 0 235px !important;
+        width: 235px !important;
+        max-width: 235px !important;
+        min-width: 0 !important;
+        z-index: 2 !important;
+        display: flex !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: none !important;
+        box-shadow: inset -1px 0 #e1e9e3 !important;
+        overflow: hidden !important;
+      }
+      .cs-ai-float-panel .cs-sidebar-overlay { display: none !important; }
+      .cs-ai-float-panel .cs-main { min-width: 0 !important; }
+      .cs-ai-float-panel .cs-menu-button { display: none !important; }
+      .cs-ai-float-panel .cs-sidebar .cs-mobile-close { display: none !important; }
+      @media (max-width: 650px) {
+        .cs-ai-float-panel .cs-float-history {
+          position: absolute !important;
+          top: 0 !important; bottom: 0 !important; left: 0 !important;
+          width: 275px !important; max-width: 85vw !important;
+          flex: none !important; z-index: 10020 !important;
+          transform: ${sidebarOpen ? "translateX(0)" : "translateX(-110%)"} !important;
+          visibility: ${sidebarOpen ? "visible" : "hidden"} !important;
+          pointer-events: ${sidebarOpen ? "auto" : "none"} !important;
+          transition: transform .25s ease, visibility .25s ease !important;
+          box-shadow: ${sidebarOpen ? "10px 0 40px rgba(23,55,35,.18)" : "none"} !important;
+        }
+        .cs-ai-float-panel .cs-sidebar-overlay { display: ${sidebarOpen ? "block" : "none"} !important; }
+        .cs-ai-float-panel .cs-menu-button { display: grid !important; }
+        .cs-ai-float-panel .cs-sidebar .cs-mobile-close { display: block !important; }
+      }
+    `}</style>
+    <div className={`cs-ai ${sidebarOpen ? "cs-history-visible" : "cs-history-hidden"}`} style={{ position: "relative", isolation: "isolate" }}>
+      <aside
+        id="clothstock-chat-history"
+        className={`cs-sidebar cs-float-history ${sidebarOpen ? "cs-sidebar-open" : ""}`}
       >
-        <span />
-        <span />
-        <span />
-      </button>
-
-      <button
-        type="button"
-        className={`cs-app-nav-backdrop ${appNavOpen ? "is-visible" : ""}`}
-        aria-label="Close main navigation"
-        tabIndex={appNavOpen ? 0 : -1}
-        onClick={() => setAppNavOpen(false)}
-      />
-
-      <nav
-        id="cs-app-navigation"
-        className={`cs-app-nav-drawer ${appNavOpen ? "is-open" : ""}`}
-        aria-hidden={!appNavOpen}
-      >
-        <div className="cs-app-nav-brand">
-          <div className="cs-app-nav-logo">C</div>
-          <div><strong>ClothStock</strong><span>INVENTORY SYSTEM</span></div>
-          <button type="button" className="cs-app-nav-close" onClick={() => setAppNavOpen(false)} aria-label="Close menu">×</button>
-        </div>
-        <p className="cs-app-nav-label">MAIN MENU</p>
-        {[
-          { id: "dashboard", label: "Dashboard", icon: "▦" },
-          { id: "products", label: "Products", icon: "□" },
-          { id: "sales", label: "Sales", icon: "↗" },
-          { id: "ai", label: "ClothStock AI", icon: "✦" },
-          ...(isAdmin ? [{ id: "reports", label: "Reports", icon: "▥" }, { id: "users", label: "User Management", icon: "♙" }] : []),
-        ].map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            className={`cs-app-nav-item ${item.id === "ai" ? "is-current" : ""}`}
-            onClick={() => {
-              setAppNavOpen(false);
-              if (item.id === "ai") return;
-              window.dispatchEvent(new CustomEvent("clothstock:navigate", { detail: { section: item.id } }));
-            }}
-            tabIndex={appNavOpen ? 0 : -1}
-          >
-            <span className="cs-app-nav-item-icon">{item.icon}</span>
-            <span>{item.label}</span>
-            {item.id === "ai" && <span className="cs-app-nav-current-dot" />}
-          </button>
-        ))}
-        <div className="cs-app-nav-footer">
-          <span className="cs-app-nav-user-avatar">{(user?.name || user?.email || "U").charAt(0).toUpperCase()}</span>
-          <div><strong>{user?.name || user?.email || "ClothStock user"}</strong><span>{isAdmin ? "Administrator" : "Staff account"}</span></div>
-        </div>
-      </nav>
-
-      <aside className={`cs-sidebar ${sidebarOpen ? "cs-sidebar-open" : ""}`}>
         <div className="cs-brand">
           <div className="cs-brand-icon">C</div>
           <div>
@@ -856,48 +859,23 @@ function AI() {
         <button
           type="button"
           className="cs-sidebar-overlay"
-          aria-label="Close navigation"
+          aria-label="Close chat history"
           onClick={() => setSidebarOpen(false)}
+          style={{
+            display: "block",
+            position: "fixed",
+            inset: 0,
+            zIndex: 10010,
+            width: "100vw",
+            height: "100vh",
+            border: 0,
+            background: "rgba(20, 37, 26, .38)",
+            cursor: "pointer",
+          }}
         />
       )}
 
       <main className="cs-main">
-        <header className="cs-topbar">
-          <button
-            type="button"
-            className="cs-menu-button"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open conversations"
-          >
-            ☰
-          </button>
-          <div className="cs-topbar-title">
-            <span className="cs-online-dot" />
-            <span>Inventory Assistant</span>
-            <span className="cs-beta">WORKSPACE</span>
-          </div>
-          <div className="cs-topbar-actions">
-            <button
-              type="button"
-              className="cs-tools-menu-button"
-              onClick={() => setToolsMenuOpen((open) => !open)}
-              aria-expanded={toolsMenuOpen}
-              aria-controls="cs-tools-menu"
-              title="Open inventory tools"
-            >
-              <span className="cs-tools-menu-icon">☰</span> Tools
-            </button>
-            <button
-              type="button"
-              className="cs-topbar-new"
-            disabled={loading}
-            onClick={clearCurrentChat}
-            >
-              ＋ New chat
-            </button>
-          </div>
-        </header>
-
         <section className="cs-hero-banner">
   <div className="cs-hero-copy">
     <span className="cs-hero-badge">✦ AI ASSISTANT</span>
@@ -935,6 +913,49 @@ function AI() {
     </div>
   </div>
 </section>
+        <header className="cs-topbar">
+          <button
+            type="button"
+            className="cs-menu-button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSidebarOpen((open) => !open);
+            }}
+            aria-expanded={sidebarOpen}
+            aria-controls="clothstock-chat-history"
+            aria-label={sidebarOpen ? "Close conversations" : "Open conversations"}
+          >
+            ☰
+          </button>
+          <div className="cs-topbar-title">
+            <span className="cs-online-dot" />
+            <span>Inventory Assistant</span>
+            <span className="cs-beta">WORKSPACE</span>
+          </div>
+          <div className="cs-topbar-actions">
+            <button
+              type="button"
+              className="cs-tools-menu-button"
+              onClick={() => setToolsMenuOpen((open) => !open)}
+              aria-expanded={toolsMenuOpen}
+              aria-controls="cs-tools-menu"
+              title="Open inventory tools"
+            >
+              <span className="cs-tools-menu-icon">☰</span> Tools
+            </button>
+            <button
+              type="button"
+              className="cs-topbar-new"
+            disabled={loading}
+            onClick={clearCurrentChat}
+            >
+              ＋ New chat
+            </button>
+          </div>
+        </header>
+
+
 
         <div className="cs-ai-toolbar">
           <button
@@ -1221,10 +1242,11 @@ function AI() {
         .cs-ai {
           --cs-green:#176b45; --cs-dark:#104c33; --cs-text:#26372d;
           --cs-muted:#7a887f; --cs-border:#e4ebe6;
-          display:flex; min-height:760px; height:calc(100vh - 110px);
+          display:flex; min-height:760px; height:calc(100vh + 10px);
           max-height:1050px; overflow:hidden; border:1px solid var(--cs-border);
           border-radius:18px; background:#f7f9f7; color:var(--cs-text);
           font-family:Inter,system-ui,-apple-system,sans-serif;
+          margin-top:-120px;
         }
         .cs-ai * {box-sizing:border-box}
         .cs-sidebar {width:255px;flex:0 0 255px;display:flex;flex-direction:column;padding:22px 14px 14px;background:#fff;border-right:1px solid var(--cs-border);min-height:0}
@@ -1397,12 +1419,10 @@ function AI() {
           color: #073d32;
           box-shadow: none;
         }
-        /* The application already provides the main navigation and page header. */
-        .cs-ai > .cs-sidebar,
-        .cs-ai > .cs-sidebar-overlay,
-        .cs-ai .cs-topbar {
-          display: none !important;
-        }
+        /* Keep the AI chat history and its own topbar available. */
+        .cs-ai > .cs-sidebar { display: flex !important; }
+        .cs-ai > .cs-sidebar-overlay { display: block !important; }
+        .cs-ai .cs-topbar { display: flex !important; }
         .cs-ai .cs-main {
           display: block;
           min-width: 0;
@@ -1942,6 +1962,9 @@ function AI() {
         }
         .cs-ai .cs-hero-banner {
           flex: 0 0 auto !important;
+          min-height: 118px !important;
+          margin: 8px 18px 10px 82px !important;
+          padding: 12px 22px !important;
         }
         .cs-ai .cs-workspace {
           display: flex !important;
@@ -2522,7 +2545,662 @@ function AI() {
         .cs-ai .cs-app-nav-footer div span { display:block; margin-top:3px; color:#81988b; font-size:10px; }
         @media (max-width:600px) { .cs-ai .cs-app-nav-trigger { top:12px; left:12px; width:43px; height:43px; border-radius:13px; } .cs-ai .cs-app-nav-drawer { padding:18px 13px 14px; } }
         @media (prefers-reduced-motion: reduce) { .cs-ai .cs-app-nav-trigger, .cs-ai .cs-app-nav-trigger span, .cs-ai .cs-app-nav-backdrop, .cs-ai .cs-app-nav-drawer, .cs-ai .cs-app-nav-item, .cs-ai .cs-app-nav-close { transition:none !important; } }
+
+
+        /* Compact the welcome banner so the conversation area gets priority */
+        .cs-ai .cs-hero-banner {
+          min-height: 142px;
+          height: 142px;
+          flex: 0 0 142px;
+          padding: 16px clamp(20px, 2.4vw, 32px);
+          margin: 0 18px 10px;
+          border-radius: 14px;
+        }
+        .cs-ai .cs-hero-copy { max-width: 760px; }
+        .cs-ai .cs-hero-badge { padding: 5px 9px; font-size: 9px; }
+        .cs-ai .cs-hero-copy h2 { margin: 7px 0 5px; font-size: clamp(21px, 2vw, 28px); }
+        .cs-ai .cs-hero-copy p { max-width: 620px; font-size: 11px; line-height: 1.45; }
+        .cs-ai .cs-hero-tags { gap: 6px; margin-top: 9px; }
+        .cs-ai .cs-hero-tags span { padding: 5px 8px; font-size: 9px; }
+        .cs-ai .cs-hero-art { flex-basis: 155px; height: 128px; transform: scale(.82); transform-origin: center; }
+        .cs-ai .cs-hero-robot { animation: clothstockRobotFloat 3.2s ease-in-out infinite; }
+        .cs-ai .cs-hero-orbit { animation: clothstockOrbit 7s linear infinite; }
+        .cs-ai .cs-robot-antenna::before { animation: clothstockAntennaGlow 1.8s ease-in-out infinite; }
+        .cs-ai .cs-robot-eye { animation: clothstockRobotBlink 4.8s infinite; transform-origin: center; }
+        .cs-ai .cs-robot-eye:nth-child(2) { animation-delay: .08s; }
+        .cs-ai .cs-hero-speech { animation: clothstockSpeechFloat 3.2s ease-in-out infinite; }
+        @keyframes clothstockRobotFloat {
+          0%, 100% { transform: translateY(0) rotate(-1deg); }
+          50% { transform: translateY(-7px) rotate(1deg); }
+        }
+        @keyframes clothstockOrbit {
+          from { transform: rotate(0deg) translateX(9px) rotate(0deg); }
+          to { transform: rotate(360deg) translateX(9px) rotate(-360deg); }
+        }
+        @keyframes clothstockAntennaGlow {
+          0%, 100% { box-shadow: 0 0 8px #a4ffd0; }
+          50% { box-shadow: 0 0 21px #a4ffd0, 0 0 30px rgba(164,255,208,.55); }
+        }
+        @keyframes clothstockRobotBlink {
+          0%, 43%, 47%, 100% { transform: scaleY(1); }
+          45% { transform: scaleY(.12); }
+        }
+        @keyframes clothstockSpeechFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        /* Keep the chat and composer inside the available viewport height */
+        .cs-ai .cs-ai-toolbar { flex: 0 0 auto; margin: 0 18px 8px; }
+        .cs-ai .cs-workspace { min-height: 0; }
+        .cs-ai .cs-chat-column { min-height: 0; }
+        .cs-ai .cs-chat-scroll { padding: 14px 20px; }
+        .cs-ai .cs-welcome { margin-bottom: 12px; }
+        .cs-ai .cs-welcome-icon { width: 38px; height: 38px; margin-right: 10px; margin-bottom: 6px; font-size: 23px; }
+        .cs-ai .cs-welcome h1 { font-size: 18px; }
+        .cs-ai .cs-welcome-text { margin-bottom: 10px; font-size: 11px; line-height: 1.5; }
+        .cs-ai .cs-suggestions { margin-top: 10px; }
+        .cs-ai .cs-suggestion { min-height: 58px; padding: 9px; }
+        .cs-ai .cs-composer-area { padding: 9px 14px 11px; }
+        .cs-ai .cs-composer textarea { min-height: 30px; max-height: 78px; }
+        @media (max-height: 800px) and (min-width: 851px) {
+          .cs-ai { height: calc(100vh - 82px); }
+          .cs-ai .cs-hero-banner { height: 126px; min-height: 126px; flex-basis: 126px; }
+          .cs-ai .cs-hero-art { transform: scale(.7); }
+          .cs-ai .cs-chat-scroll { padding-top: 10px; padding-bottom: 10px; }
+          .cs-ai .cs-suggestion { min-height: 50px; }
+        }
+        @media (max-width: 850px) {
+          .cs-ai .cs-hero-banner { height: auto; min-height: 0; flex-basis: auto; margin: 0 10px 8px; padding: 16px; }
+          .cs-ai .cs-hero-art { display: none; }
+          .cs-ai .cs-ai-toolbar { margin: 0 10px 8px; }
+          .cs-ai .cs-workspace { padding: 0 10px 10px; }
+          .cs-ai .cs-chat-column { height: 58vh; min-height: 360px; }
+          .cs-ai .cs-suggestions { grid-template-columns: 1fr; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cs-ai .cs-hero-robot, .cs-ai .cs-hero-orbit,
+          .cs-ai .cs-robot-antenna::before, .cs-ai .cs-robot-eye,
+          .cs-ai .cs-hero-speech { animation: none !important; }
+        }
+
+        /* FINAL LAYOUT: place the welcome banner first and reclaim the top gap */
+        .cs-ai {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: stretch;
+        }
+        .cs-ai > .cs-main {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: stretch;
+          justify-content: flex-start;
+          min-height: 0 !important;
+          height: 100% !important;
+          gap: 0;
+        }
+        .cs-ai .cs-hero-banner {
+          order: 0 !important;
+          flex: 0 0 auto;
+          min-height: 175px;
+          margin: 0 18px 12px !important;
+          padding: 22px clamp(20px, 2.5vw, 32px) !important;
+        }
+        .cs-ai .cs-topbar {
+          order: 1 !important;
+          flex: 0 0 56px;
+        }
+        .cs-ai .cs-ai-toolbar {
+          order: 2 !important;
+          flex: 0 0 auto;
+          margin: 0 18px 10px !important;
+        }
+        .cs-ai .cs-workspace {
+          order: 3 !important;
+          flex: 1 1 0;
+          min-height: 0;
+          height: 0;
+        }
+        @media (max-width: 850px) {
+          .cs-ai .cs-hero-banner {
+            min-height: 150px;
+            margin: 0 12px 10px !important;
+            padding: 18px 16px !important;
+          }
+          .cs-ai .cs-ai-toolbar { margin: 0 12px 8px !important; }
+          .cs-ai .cs-workspace { flex: 1 1 0; min-height: 0; }
+        }
+        @media (max-width: 600px) {
+          .cs-ai .cs-hero-banner { min-height: 130px; padding: 15px !important; }
+          .cs-ai .cs-hero-art { display: flex !important; flex-basis: 90px; transform: scale(.72); transform-origin: center right; }
+          .cs-ai .cs-hero-copy p { max-width: 90%; }
+          .cs-ai .cs-hero-tags { gap: 5px; margin-top: 9px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cs-ai .cs-hero-robot,
+          .cs-ai .cs-robot-eye,
+          .cs-ai .cs-robot-antenna,
+          .cs-ai .cs-hero-orbit,
+          .cs-ai .cs-hero-speech { animation: none !important; }
+        }
+
+        @media (max-width: 760px) {
+          .cs-ai { margin-top: -92px !important; height: calc(100vh + 8px) !important; }
+          .cs-ai .cs-hero-banner { margin: 8px 10px 10px 70px !important; padding: 12px 14px !important; min-height: 112px !important; }
+          .cs-ai .cs-hero-art { display: none !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cs-ai .cs-hero-robot, .cs-ai .cs-robot-eye, .cs-ai .cs-robot-antenna, .cs-ai .cs-hero-orbit, .cs-ai .cs-hero-speech { animation: none !important; }
+        }
+
+        /* FINAL FIX: stretch the conversation to the bottom and dock the message input */
+        .cs-ai {
+          height: calc(100dvh - 94px) !important;
+          min-height: 680px !important;
+          max-height: none !important;
+          overflow: hidden !important;
+          align-items: stretch !important;
+        }
+        .cs-ai > .cs-main {
+          flex: 1 1 auto !important;
+          height: 100% !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        .cs-ai .cs-workspace {
+          flex: 1 1 0 !important;
+          height: 0 !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          padding-bottom: 12px !important;
+        }
+        .cs-ai .cs-chat-column {
+          display: flex !important;
+          flex: 1 1 auto !important;
+          flex-direction: column !important;
+          height: 100% !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        .cs-ai .cs-chat-scroll {
+          flex: 1 1 auto !important;
+          height: 0 !important;
+          min-height: 0 !important;
+          overflow-y: auto !important;
+          overscroll-behavior: contain !important;
+        }
+        .cs-ai .cs-composer-area {
+          position: relative !important;
+          flex: 0 0 auto !important;
+          margin-top: auto !important;
+          width: 100% !important;
+          background: #fff !important;
+          z-index: 2 !important;
+        }
+        @media (max-width: 760px) {
+          .cs-ai {
+            height: calc(100dvh - 78px) !important;
+            min-height: 600px !important;
+          }
+          .cs-ai .cs-workspace { padding: 0 10px 10px !important; }
+          .cs-ai .cs-composer-area { padding: 9px 10px 12px !important; }
+        }
+        /* Final layout refinements: taller, wider conversation and unobstructed hero robot */
+        .cs-ai .cs-main {
+          display: flex !important;
+          flex-direction: column !important;
+          height: calc(100vh - 110px);
+          min-height: 620px !important;
+          min-width: 0;
+        }
+        .cs-ai .cs-hero-banner {
+          flex: 0 0 auto;
+          margin-bottom: 12px;
+        }
+        .cs-ai .cs-hero-speech {
+          right: calc(100% + 12px) !important;
+          top: 30px !important;
+          z-index: 2;
+          white-space: nowrap;
+        }
+        .cs-ai .cs-topbar {
+          flex: 0 0 auto;
+        }
+        .cs-ai .cs-ai-toolbar {
+          flex: 0 0 auto;
+        }
+        .cs-ai .cs-workspace {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) !important;
+          flex: 1 1 auto;
+          min-height: 0 !important;
+          overflow: hidden;
+        }
+        .cs-ai .cs-chat-column {
+          display: flex !important;
+          flex-direction: column !important;
+          width: 100%;
+          height: 100%;
+          min-height: 0 !important;
+          max-width: none;
+          overflow: hidden;
+        }
+        .cs-ai .cs-chat-scroll {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto !important;
+          padding: 22px 28px;
+        }
+        .cs-ai .cs-messages {
+          width: 100%;
+          max-width: none !important;
+        }
+        .cs-ai .cs-message-assistant {
+          width: 100%;
+          justify-content: flex-start;
+        }
+        .cs-ai .cs-message-assistant .cs-message-body {
+          flex: 1 1 auto;
+          min-width: 0;
+          max-width: none;
+        }
+        .cs-ai .cs-composer-area {
+          flex: 0 0 auto;
+          width: 100%;
+          padding: 16px 24px 12px !important;
+        }
+        .cs-ai .cs-composer {
+          width: 100%;
+          max-width: none !important;
+          margin: 0 auto;
+        }
+        .cs-ai .cs-insights-column {
+          display: none;
+        }
+        .cs-ai .cs-insights-column.cs-tools-menu-open {
+          display: flex;
+          position: fixed;
+          z-index: 10020;
+          top: 100px;
+          right: 20px;
+          bottom: 20px;
+          width: min(340px, calc(100vw - 40px));
+          overflow-y: auto;
+          padding: 16px;
+          border: 1px solid #dcece4;
+          border-radius: 16px;
+          background: #f8fbf9;
+          box-shadow: 0 16px 48px rgba(0,0,0,.18);
+        }
+        @media (max-width: 850px) {
+          .cs-ai .cs-main {
+            height: auto;
+            min-height: calc(100vh - 100px) !important;
+          }
+          .cs-ai .cs-workspace {
+            min-height: 65vh !important;
+            overflow: visible;
+          }
+          .cs-ai .cs-chat-column {
+            min-height: 65vh !important;
+          }
+          .cs-ai .cs-hero-speech {
+            right: calc(100% + 8px) !important;
+            top: 22px !important;
+            font-size: 9px;
+          }
+        }
+        @media (max-width: 560px) {
+          .cs-ai .cs-main {
+            min-height: 0 !important;
+          }
+          .cs-ai .cs-hero-speech {
+            right: calc(100% + 5px) !important;
+            top: 12px !important;
+            padding: 7px 8px;
+            font-size: 8px;
+          }
+          .cs-ai .cs-chat-scroll {
+            padding: 16px 12px;
+          }
+          .cs-ai .cs-composer-area {
+            padding: 12px !important;
+          }
+        }
+
+        /* Final requested adjustments: narrower centered chat and composer at the bottom */
+        .cs-ai .cs-workspace {
+          width: calc(100% - 36px) !important;
+          max-width: 1320px !important;
+          margin: 0 auto 24px !important;
+          min-height: 0 !important;
+          flex: 1 1 auto !important;
+          align-self: center !important;
+        }
+        .cs-ai .cs-chat-column {
+          min-height: 0 !important;
+          height: 100% !important;
+          flex: 1 1 auto !important;
+        }
+        .cs-ai .cs-chat-scroll {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          padding: 20px 24px !important;
+        }
+        .cs-ai .cs-welcome {
+          width: 100% !important;
+          max-width: 820px !important;
+          margin: 0 auto 18px !important;
+        }
+        .cs-ai .cs-messages {
+          width: 100% !important;
+          max-width: 900px !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+        .cs-ai .cs-composer-area {
+          width: 100% !important;
+          flex: 0 0 auto !important;
+          margin-top: auto !important;
+          padding: 16px 20px 18px !important;
+        }
+        .cs-ai .cs-composer {
+          width: 100% !important;
+          max-width: 900px !important;
+          margin: 0 auto !important;
+        }
+        @media (min-width: 761px) {
+          .cs-ai .cs-main {
+            min-height: calc(100vh - 280px) !important;
+          }
+          .cs-ai .cs-workspace {
+            min-height: 430px !important;
+          }
+        }
+        @media (max-width: 760px) {
+          .cs-ai .cs-workspace {
+            width: calc(100% - 16px) !important;
+            margin-bottom: 12px !important;
+          }
+          .cs-ai .cs-chat-scroll {
+            padding: 14px 12px !important;
+          }
+          .cs-ai .cs-welcome,
+          .cs-ai .cs-messages,
+          .cs-ai .cs-composer {
+            max-width: 100% !important;
+          }
+          .cs-ai .cs-composer-area {
+            padding: 12px !important;
+          }
+        }
+        /* Final layout refinements from the user's marked screenshot */
+        .cs-ai .cs-hero-banner {
+          flex: 0 0 auto !important;
+          min-height: 150px !important;
+          height: auto !important;
+          padding: 18px 24px !important;
+          overflow: hidden !important;
+        }
+        .cs-ai .cs-hero-copy {
+          min-width: 0 !important;
+          max-width: calc(100% - 190px) !important;
+        }
+        .cs-ai .cs-hero-tags {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          gap: 6px !important;
+          max-width: 100% !important;
+          overflow: visible !important;
+        }
+        .cs-ai .cs-hero-tags span {
+          display: inline-flex !important;
+          align-items: center !important;
+          max-width: 100% !important;
+          white-space: normal !important;
+          overflow-wrap: anywhere !important;
+          font-size: 10px !important;
+          line-height: 1.25 !important;
+          padding: 5px 8px !important;
+        }
+        .cs-ai .cs-workspace {
+          flex: 1 1 auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          grid-template-columns: minmax(0, 1fr) !important;
+          padding: 0 20px 20px !important;
+          gap: 0 !important;
+        }
+        .cs-ai .cs-chat-column {
+          min-height: 0 !important;
+          height: 100% !important;
+        }
+        .cs-ai .cs-chat-scroll {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          padding: 22px clamp(22px, 6vw, 76px) !important;
+        }
+        .cs-ai .cs-welcome,
+        .cs-ai .cs-messages,
+        .cs-ai .cs-error,
+        .cs-ai .cs-result-panel {
+          width: 100% !important;
+          max-width: 820px !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+        .cs-ai .cs-composer-area {
+          flex: 0 0 auto !important;
+          margin-top: auto !important;
+          padding: 14px 24px 20px !important;
+        }
+        .cs-ai .cs-composer {
+          width: 100% !important;
+          max-width: 760px !important;
+          margin: 0 auto !important;
+        }
+        .cs-ai .cs-disclaimer {
+          margin-top: 10px !important;
+        }
+        @media (max-width: 760px) {
+          .cs-ai .cs-hero-banner { padding: 15px !important; min-height: 0 !important; }
+          .cs-ai .cs-hero-copy { max-width: calc(100% - 95px) !important; }
+          .cs-ai .cs-hero-tags span { font-size: 9px !important; padding: 4px 6px !important; }
+          .cs-ai .cs-workspace { padding: 0 10px 10px !important; }
+          .cs-ai .cs-chat-scroll { padding: 16px 12px !important; }
+          .cs-ai .cs-composer-area { padding: 10px 12px 14px !important; }
+          .cs-ai .cs-composer { max-width: 100% !important; }
+        }
+        /* Latest request: extend the conversation panel down into the empty space */
+        @media (min-width: 761px) {
+          .cs-ai {
+            min-height: 100vh !important;
+          }
+          .cs-ai .cs-main {
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: calc(100dvh - 94px) !important;
+            height: auto !important;
+          }
+          .cs-ai .cs-workspace {
+            flex: 1 1 auto !important;
+            min-height: max(500px, calc(100dvh - 420px)) !important;
+            height: auto !important;
+            margin-bottom: 0 !important;
+          }
+          .cs-ai .cs-chat-column {
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+            height: 100% !important;
+          }
+          .cs-ai .cs-chat-scroll {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+          }
+          .cs-ai .cs-composer-area {
+            margin-top: auto !important;
+          }
+        }
+        @media (max-width: 760px) {
+          .cs-ai .cs-workspace { min-height: 65vh !important; }
+        }
+
+        /* Mobile-safe refinements: responsive hero banner and always-visible Send button */
+        .cs-ai .cs-hero-banner { position:relative !important; display:flex !important; align-items:center !important; gap:12px !important; min-width:0 !important; }
+        .cs-ai .cs-hero-copy { flex:1 1 auto !important; min-width:0 !important; }
+        .cs-ai .cs-hero-art { flex:0 0 150px !important; min-width:0 !important; }
+        .cs-ai .cs-composer, .cs-ai .cs-composer-bottom, .cs-ai .cs-send { min-width:0 !important; }
+        .cs-ai .cs-composer-bottom { display:flex !important; flex-wrap:wrap !important; justify-content:space-between !important; align-items:center !important; gap:10px !important; }
+        .cs-ai .cs-composer-bottom > span { flex:1 1 120px !important; max-width:100% !important; overflow-wrap:anywhere !important; }
+        .cs-ai .cs-send { flex:0 0 auto !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; min-height:42px !important; white-space:nowrap !important; visibility:visible !important; }
+        @media (max-width:760px) {
+          .cs-ai { width:100% !important; max-width:100vw !important; min-width:0 !important; height:auto !important; min-height:100dvh !important; overflow:visible !important; margin-top:0 !important; border-radius:0 !important; }
+          .cs-ai > .cs-main { width:100% !important; min-width:0 !important; height:auto !important; min-height:100dvh !important; overflow:visible !important; }
+          .cs-ai .cs-hero-banner { width:auto !important; min-height:0 !important; height:auto !important; margin:8px 10px 10px !important; padding:15px 14px !important; gap:5px !important; overflow:hidden !important; border-radius:18px !important; }
+          .cs-ai .cs-hero-copy { flex:1 1 auto !important; width:auto !important; max-width:none !important; min-width:0 !important; }
+          .cs-ai .cs-hero-copy h2 { font-size:clamp(18px,5vw,25px) !important; line-height:1.2 !important; overflow-wrap:anywhere !important; }
+          .cs-ai .cs-hero-copy p { max-width:none !important; font-size:12px !important; line-height:1.45 !important; }
+          .cs-ai .cs-hero-tags { display:flex !important; flex-wrap:wrap !important; gap:5px !important; margin-top:9px !important; }
+          .cs-ai .cs-hero-tags span { max-width:100% !important; white-space:normal !important; overflow-wrap:anywhere !important; font-size:9px !important; line-height:1.25 !important; padding:5px 7px !important; }
+          .cs-ai .cs-hero-art { display:flex !important; position:relative !important; flex:0 0 76px !important; width:76px !important; height:92px !important; align-self:center !important; transform:scale(.58) !important; transform-origin:center right !important; margin-left:-7px !important; }
+          .cs-ai .cs-hero-speech { display:none !important; }
+          .cs-ai .cs-topbar, .cs-ai .cs-ai-toolbar { min-width:0 !important; margin-left:10px !important; margin-right:10px !important; }
+          .cs-ai .cs-topbar { gap:8px !important; flex-wrap:wrap !important; height:auto !important; min-height:54px !important; }
+          .cs-ai .cs-topbar-title { min-width:0 !important; flex:1 1 100px !important; overflow-wrap:anywhere !important; }
+          .cs-ai .cs-topbar-actions { min-width:0 !important; gap:6px !important; }
+          .cs-ai .cs-tools-menu-button, .cs-ai .cs-topbar-new { padding:8px 9px !important; white-space:nowrap !important; }
+          .cs-ai .cs-workspace { width:auto !important; max-width:none !important; min-height:58vh !important; height:auto !important; margin:0 10px 12px !important; padding:0 !important; overflow:visible !important; }
+          .cs-ai .cs-chat-column { width:100% !important; min-width:0 !important; min-height:58vh !important; height:auto !important; overflow:hidden !important; }
+          .cs-ai .cs-chat-scroll { min-width:0 !important; min-height:300px !important; height:auto !important; padding:16px 12px !important; }
+          .cs-ai .cs-welcome, .cs-ai .cs-messages, .cs-ai .cs-error, .cs-ai .cs-result-panel { width:100% !important; max-width:100% !important; }
+          .cs-ai .cs-composer-area { position:relative !important; flex:0 0 auto !important; width:100% !important; min-width:0 !important; padding:10px !important; margin-top:0 !important; }
+          .cs-ai .cs-composer { display:block !important; width:100% !important; max-width:100% !important; min-width:0 !important; padding:12px !important; }
+          .cs-ai .cs-composer textarea { display:block !important; width:100% !important; min-width:0 !important; min-height:48px !important; max-height:110px !important; font-size:14px !important; }
+          .cs-ai .cs-composer-bottom { width:100% !important; padding-top:10px !important; }
+          .cs-ai .cs-send { min-width:82px !important; min-height:42px !important; padding:10px 13px !important; }
+          .cs-ai .cs-disclaimer { margin:8px 0 0 !important; text-align:center !important; line-height:1.4 !important; }
+        }
+        @media (max-width:390px) {
+          .cs-ai .cs-hero-banner { padding:13px 11px !important; }
+          .cs-ai .cs-hero-art { flex-basis:58px !important; width:58px !important; transform:scale(.48) !important; }
+          .cs-ai .cs-hero-copy h2 { font-size:18px !important; }
+          .cs-ai .cs-topbar-title { font-size:11px !important; }
+          .cs-ai .cs-tools-menu-button { font-size:11px !important; }
+          .cs-ai .cs-topbar-new { font-size:10px !important; }
+          .cs-ai .cs-composer-bottom > span { flex-basis:100px !important; font-size:9px !important; }
+        }
       `}</style>
+    </div>
+        </div>
+      </section>
+      <style>{`
+        .cs-ai-float-shell{position:fixed;right:22px;bottom:94px;z-index:9990;font-family:Inter,system-ui,sans-serif}
+        .cs-ai-float-launcher{position:relative;display:grid;place-items:center;width:62px;height:62px;padding:0;border:3px solid white;border-radius:50%;background:#176b45;box-shadow:0 7px 26px #102c1c40;cursor:pointer;animation:cs-float-bob 3s ease-in-out infinite}
+        .cs-ai-float-launcher .cs-ai-profile-picture,.cs-ai-float-launcher .cs-ai-profile-picture svg{display:block;width:100%;height:100%}
+        .cs-ai-float-online{position:absolute;right:0;bottom:1px;width:14px;height:14px;border:2px solid white;border-radius:50%;background:#31c777}
+        .cs-ai-float-panel{position:fixed;right:22px;bottom:94px;width:min(850px,calc(100vw - 32px));height:min(720px,calc(100dvh - 125px));border:1px solid #dce7df;border-radius:18px;background:#f7f9f7;box-shadow:0 20px 70px #102c1c40;overflow:hidden;transform-origin:bottom right;transition:opacity .22s ease,transform .28s ease,visibility .22s}
+        .cs-ai-float-panel.is-collapsed{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(18px) scale(.16)}
+        .cs-ai-float-panel.is-expanded{opacity:1;visibility:visible;pointer-events:auto;transform:none}
+        .cs-ai-float-windowbar{height:62px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 15px;background:#176b45;color:white}
+        .cs-ai-float-windowbrand{display:flex;align-items:center;gap:10px;min-width:0}.cs-ai-float-windowbrand .cs-ai-profile-picture{width:42px;height:42px}.cs-ai-float-windowbrand strong,.cs-ai-float-windowbrand small{display:block}.cs-ai-float-windowbrand small{margin-top:3px;font-size:11px;opacity:.82}
+        .cs-ai-float-windowcontrols{display:flex;gap:5px}.cs-ai-float-windowcontrols button{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:8px;background:#ffffff20;color:white;font-size:24px;cursor:pointer}
+        .cs-ai-float-content{height:calc(100% - 62px);min-height:0}.cs-ai-float-panel .cs-ai{display:flex!important;flex-direction:row!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;overflow:hidden!important}
+        .cs-ai-float-panel .cs-hero-banner,.cs-ai-float-panel .cs-ai-toolbar,.cs-ai-float-panel .cs-insights-column{display:none!important}.cs-ai-float-panel .cs-main{display:flex!important;flex:1 1 auto!important;flex-direction:column!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-workspace{display:flex!important;flex:1 1 auto!important;min-height:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-chat-column{display:flex!important;flex:1 1 auto!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-chat-scroll{flex:1 1 auto!important;min-height:0!important;height:auto!important;padding:16px!important;overflow-y:auto!important}.cs-ai-float-panel .cs-composer-area{flex:0 0 auto!important}.cs-ai-float-panel .cs-suggestions{grid-template-columns:1fr!important}
+        /* Desktop chat history: reserve a permanent column beside the conversation. */
+        @media (min-width: 651px) {
+          .cs-ai-float-panel { width: min(1040px, calc(100vw - 40px)) !important; }
+          .cs-ai-float-content { display: block !important; }
+          .cs-ai-float-panel .cs-ai { display: flex !important; flex-direction: row !important; align-items: stretch !important; }
+          .cs-ai-float-panel .cs-ai > .cs-float-history,
+          .cs-ai-float-panel .cs-ai > aside.cs-sidebar {
+            display: flex !important; flex: 0 0 245px !important; width: 245px !important;
+            min-width: 245px !important; max-width: 245px !important; height: 100% !important;
+            position: relative !important; inset: auto !important; visibility: visible !important;
+            opacity: 1 !important; transform: none !important; pointer-events: auto !important;
+            overflow: hidden !important; z-index: 3 !important; background: #fff !important;
+            border-right: 1px solid #dce7df !important; box-shadow: none !important;
+          }
+          .cs-ai-float-panel .cs-ai > .cs-main { flex: 1 1 0 !important; width: 0 !important; min-width: 0 !important; }
+          .cs-ai-float-panel .cs-ai .cs-history { display: flex !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; }
+          .cs-ai-float-panel .cs-ai .cs-sidebar-overlay,
+          .cs-ai-float-panel .cs-ai .cs-menu-button,
+          .cs-ai-float-panel .cs-ai .cs-mobile-close { display: none !important; }
+        }
+        /* History toggle works on desktop too, with a polished width/opacity transition. */
+        .cs-ai-float-panel .cs-menu-button{display:grid!important;place-items:center!important;flex:0 0 36px!important;width:36px!important;height:36px!important;border:1px solid #dce9df!important;border-radius:10px!important;background:#f2f8f3!important;color:#176b45!important;font-size:20px!important;cursor:pointer!important;transition:background .18s ease,transform .22s ease!important}
+        .cs-ai-float-panel .cs-menu-button:hover{background:#e0f2e5!important;transform:scale(1.06)}
+        @media(min-width:651px){
+          .cs-ai-float-panel .cs-ai>.cs-float-history{transition:flex-basis .28s cubic-bezier(.2,.8,.2,1),width .28s, min-width .28s,opacity .18s,transform .28s!important}
+          .cs-ai-float-panel .cs-ai.cs-history-hidden>.cs-float-history{flex-basis:0!important;width:0!important;min-width:0!important;max-width:0!important;opacity:0!important;transform:translateX(-14px)!important;border:0!important;pointer-events:none!important}
+          .cs-ai-float-panel .cs-ai.cs-history-hidden .cs-menu-button{transform:rotate(180deg)}
+          .cs-ai-float-panel .cs-ai.cs-history-visible .cs-menu-button{display:grid!important}
+        }
+        @keyframes cs-float-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+        @media(max-width:650px){
+          .cs-ai-float-shell{right:14px;bottom:84px}
+          .cs-ai-float-launcher{width:56px;height:56px}
+          /* Mobile chat uses the full available screen instead of a clipped card. */
+          .cs-ai-float-panel{position:fixed!important;inset:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;border:0!important;transform-origin:center!important}
+          .cs-ai-float-content{height:calc(100% - 62px)!important;width:100%!important;min-width:0!important;overflow:hidden!important}
+          .cs-ai-float-panel .cs-ai{width:100%!important;max-width:100%!important;min-width:0!important;height:100%!important;min-height:0!important;overflow:hidden!important}
+          .cs-ai-float-panel .cs-main{width:100%!important;min-width:0!important;max-width:100%!important;flex:1 1 0!important}
+          .cs-ai-float-panel .cs-topbar{height:auto!important;min-height:54px!important;gap:7px!important;padding:8px 10px!important;flex-wrap:wrap!important}
+          .cs-ai-float-panel .cs-topbar-title{gap:6px!important;font-size:11px!important;min-width:0!important}
+          .cs-ai-float-panel .cs-beta{display:none!important}
+          .cs-ai-float-panel .cs-topbar-actions{display:flex!important;gap:6px!important;min-width:0!important}
+          .cs-ai-float-panel .cs-topbar-new,.cs-ai-float-panel .cs-tools-menu-button{padding:7px 8px!important;font-size:10px!important;white-space:nowrap!important}
+          .cs-ai-float-panel .cs-chat-scroll{width:100%!important;max-width:100%!important;min-width:0!important;padding:12px!important;overflow-x:hidden!important}
+          .cs-ai-float-panel .cs-messages{width:100%!important;max-width:100%!important;min-width:0!important}
+          .cs-ai-float-panel .cs-message{max-width:100%!important;min-width:0!important}
+          .cs-ai-float-panel .cs-message-body{overflow-wrap:anywhere!important;min-width:0!important}
+          .cs-ai-float-panel .cs-result-panel{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:auto!important}
+          .cs-ai-float-panel .cs-composer-area{width:100%!important;max-width:100%!important;min-width:0!important;padding:8px!important}
+          .cs-ai-float-panel .cs-composer{width:100%!important;max-width:100%!important;min-width:0!important}
+          .cs-ai-float-panel .cs-composer textarea,.cs-ai-float-panel .cs-composer input{min-width:0!important;max-width:100%!important}
+          .cs-ai-float-panel .cs-suggestions{grid-template-columns:minmax(0,1fr)!important}
+        }
+        @media(prefers-reduced-motion:reduce){.cs-ai-float-launcher,.cs-ai-float-panel{animation:none;transition:none}}
+        /* Final interaction polish: history toggle is available on desktop and mobile. */
+        .cs-ai-float-panel .cs-ai .cs-menu-button {
+          display:grid!important; place-items:center!important; flex:0 0 36px!important;
+          width:36px!important; height:36px!important; border:1px solid #dce9df!important;
+          border-radius:10px!important; background:linear-gradient(145deg,#f7fcf8,#e8f4eb)!important;
+          color:#176b45!important; font-size:20px!important; cursor:pointer!important;
+          box-shadow:0 3px 10px #176b4510!important;
+          transition:transform .32s cubic-bezier(.2,.8,.2,1),background .2s,box-shadow .2s!important;
+        }
+        .cs-ai-float-panel .cs-ai .cs-menu-button:hover {
+          transform:translateY(-1px) scale(1.05)!important; background:#dff2e5!important;
+          box-shadow:0 6px 16px #176b4520!important;
+        }
+        .cs-ai-float-panel .cs-ai .cs-menu-button:active { transform:scale(.94)!important; }
+        @media (min-width:651px) {
+          .cs-ai-float-panel .cs-ai>.cs-float-history {
+            transition:flex-basis .36s cubic-bezier(.22,1,.36,1),width .36s cubic-bezier(.22,1,.36,1),
+              min-width .36s cubic-bezier(.22,1,.36,1),max-width .36s cubic-bezier(.22,1,.36,1),
+              opacity .2s ease,transform .36s cubic-bezier(.22,1,.36,1)!important;
+          }
+          .cs-ai-float-panel .cs-ai.cs-history-hidden>.cs-float-history {
+            flex-basis:0!important;width:0!important;min-width:0!important;max-width:0!important;
+            padding-left:0!important;padding-right:0!important;opacity:0!important;
+            transform:translateX(-22px) scale(.985)!important;border-right:0!important;
+            pointer-events:none!important;
+          }
+          .cs-ai-float-panel .cs-ai.cs-history-hidden .cs-menu-button { transform:rotate(180deg)!important; }
+          .cs-ai-float-panel .cs-ai.cs-history-visible .cs-menu-button { display:grid!important; }
+        }
+        .cs-ai-float-panel { transition:opacity .24s ease,transform .38s cubic-bezier(.22,1,.36,1),visibility .24s!important; }
+        .cs-ai-float-panel.is-expanded { animation:cs-panel-arrive .42s cubic-bezier(.22,1,.36,1) both; }
+        @keyframes cs-panel-arrive { from { opacity:0; transform:translateY(22px) scale(.975); } to { opacity:1; transform:translateY(0) scale(1); } }
+        .cs-ai-float-windowcontrols button { transition:transform .2s ease,background .2s ease,box-shadow .2s ease!important; }
+        .cs-ai-float-windowcontrols button:hover { transform:translateY(-2px); background:#ffffff35!important; box-shadow:0 5px 14px #062b1a25; }
+        .cs-ai-float-launcher { transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease!important; }
+        .cs-ai-float-launcher:hover { transform:translateY(-4px) scale(1.045)!important; box-shadow:0 16px 38px #176b4545!important; }
+        @media(prefers-reduced-motion:reduce) {
+          .cs-ai-float-panel,.cs-ai-float-panel *, .cs-ai-float-launcher { animation:none!important; transition:none!important; }
+        }
+      `}
+      </style>
     </div>
   );
 }

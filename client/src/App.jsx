@@ -207,19 +207,23 @@ const [sidebarOpen, setSidebarOpen] = useState(
   }, [checkingAuth, token, user, loadDashboard]);
 
   const navigateTo = (section) => {
-  const adminOnlySections = ["dashboard", "reports", "users"];
+    // ClothStock AI is a floating assistant, not a full-page route.
+    if (section === "ai") {
+      window.dispatchEvent(new Event("clothstock:open-ai"));
+    } else {
+      const adminOnlySections = ["dashboard", "reports", "users"];
+      if (!isAdmin && adminOnlySections.includes(section)) {
+        setActiveSection("products");
+      } else {
+        setActiveSection(section);
+      }
+    }
 
-  if (!isAdmin && adminOnlySections.includes(section)) {
-    setActiveSection("products");
-  } else {
-    setActiveSection(section);
-  }
-
-  // Close the navigation drawer after selecting a page.
-  if (window.innerWidth <= 900) {
-    setSidebarOpen(false);
-  }
-};
+    // Close the navigation drawer after selecting a page.
+    if (window.innerWidth <= 900) {
+      setSidebarOpen(false);
+    }
+  };
 
   const formatCurrency = (amount) =>
     new Intl.NumberFormat("en-PH", {
@@ -346,6 +350,20 @@ const [sidebarOpen, setSidebarOpen] = useState(
           ✨ ClothStock AI
         </button>
 
+        
+        {!isAdmin && (
+          <button
+            type="button"
+            className="nav-link staff-bottom-logout"
+            onClick={logout}
+            aria-label="Logout"
+          >
+            <span aria-hidden="true">↪</span>
+            <span>Logout</span>
+          </button>
+        )}
+
+
         {isAdmin && (
           <button
             type="button"
@@ -370,24 +388,6 @@ const [sidebarOpen, setSidebarOpen] = useState(
           </button>
         )}
 
-        <div className="user-panel">
-          <div className="user-avatar">
-            {(user.name || "U").charAt(0).toUpperCase()}
-          </div>
-
-          <div className="user-details">
-            <strong>{user.name || "User"}</strong>
-            <span>{isAdmin ? "Administrator" : "Staff"}</span>
-          </div>
-
-          <button
-            type="button"
-            className="logout-button"
-            onClick={logout}
-          >
-            Logout
-          </button>
-        </div>
 
         <div className="sidebar-footer">
           <span className="status-dot"></span>
@@ -396,6 +396,7 @@ const [sidebarOpen, setSidebarOpen] = useState(
         </div>
       </aside>
 
+      
       <main className="main-content">
         {activeSection === "dashboard" && isAdmin && (
           <section className="page-section">
@@ -457,21 +458,6 @@ const [sidebarOpen, setSidebarOpen] = useState(
               </div>
             </header>
             <Sales />
-          </section>
-        )}
-
-        {activeSection === "ai" && (
-          <section className="page-section ai-page-section">
-            <header className="topbar">
-              <div>
-                <p className="breadcrumb"></p>
-                <h1></h1>
-                <p className="subtitle">
-                </p>
-              </div>
-            </header>
-
-            <AI />
           </section>
         )}
 
@@ -602,6 +588,9 @@ const [sidebarOpen, setSidebarOpen] = useState(
           </section>
         )}
       </main>
+
+      {/* Mount once so the floating assistant stays available on every page. */}
+      <AI />
     </div>
   );
 }

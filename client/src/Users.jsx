@@ -32,7 +32,7 @@ async function readResponse(response, fallbackMessage) {
 }
 
 function Users() {
-  const { token, user } = useAuth();
+  const { token, user, logout } = useAuth();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -592,6 +592,27 @@ function Users() {
             </table>
           </div>
         )}
+      
+      </section>
+
+      {/* Logout section below the registered users table */}
+      <section className="users-logout-section">
+        <div className="users-logout-info">
+          <h3>Account Session</h3>
+          <p>
+            Finished managing user accounts? Log out securely
+            from your ClothStock administrator account.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="users-logout-button"
+          onClick={logout}
+        >
+          <span aria-hidden="true">↪</span>
+          Logout
+        </button>
       </section>
     </div>
   );

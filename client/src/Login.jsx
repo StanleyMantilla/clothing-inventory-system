@@ -1,7 +1,9 @@
 
 import { useState } from "react";
 import { useAuth } from "./AuthContext";
+import AboutUs from "./AboutUs";
 import "./Login.css";
+
 
 function ShirtIcon({ className = "" }) {
   return (
@@ -109,8 +111,14 @@ function Login() {
       <div className="login-dots login-dots-bottom" />
 
       <section className="login-layout">
-        <div className="login-showcase">
-          <div className="showcase-brand">
+        
+<div className="login-showcase">
+  <div className="login-about-position">
+    <AboutUs />
+  </div>
+
+  <div className="showcase-brand">
+
             <div className="showcase-logo">
               <ShirtIcon />
               <span className="logo-tag">•</span>
