@@ -105,13 +105,51 @@ export default function AboutUs() {
             </header>
 
             <div className="about-dialog-body">
-              <div className="about-project">
-                <div className="about-project-icon">✦</div>
-                <h3>ClothStock</h3>
-                <p className="about-project-subtitle">Clothing Inventory Management System</p>
-                <p className="about-description">{data.description}</p>
-                <div className="about-tags"><span>Inventory</span><span>Stock Tracking</span><span>Sales Records</span></div>
-              </div>
+             
+<div className="about-project">
+  <div className="about-project-icon">
+    <svg
+      viewBox="0 0 64 64"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M23 10 12 16 3 29l11 8 7-9v27h22V28l7 9 11-8-9-13-11-6c-2 6-5 9-9 9s-7-3-9-9Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M25 10c1 5 3 8 7 8s6-3 7-8"
+        stroke="#087943"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  </div>
+
+  <h3 className="about-project-brand">
+    Cloth<span>Stock</span>
+  </h3>
+
+  <p className="about-project-subtitle">
+    Clothing Inventory Management System
+  </p>
+
+  <div className="about-project-accent" />
+
+  <p className="about-description">
+    {data.description}
+  </p>
+
+  <div className="about-tags">
+    <span>Inventory</span>
+    <span>Stock Tracking</span>
+    <span>Sales Records</span>
+  </div>
+</div>
+
 
               <div className="about-team">
                 <div className="about-section-heading">

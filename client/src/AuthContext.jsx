@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useCallback,
@@ -26,6 +27,15 @@ export function AuthProvider({ children }) {
 
   const [checkingAuth, setCheckingAuth] = useState(true);
 
+  // Log out
+  const logout = useCallback(() => {
+    sessionStorage.removeItem("clothstock_token");
+    sessionStorage.removeItem("clothstock_user");
+
+    setToken("");
+    setUser(null);
+  }, []);
+
   // Log in
   const login = useCallback(async (email, password) => {
     const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -36,28 +46,34 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ email, password }),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error("Server returned an invalid response.");
+    }
 
     if (!response.ok) {
       throw new Error(data.message || "Login failed.");
     }
 
+    if (!data.token || !data.user) {
+      throw new Error("Login response is missing token or user.");
+    }
+
     sessionStorage.setItem("clothstock_token", data.token);
-    sessionStorage.setItem("clothstock_user", JSON.stringify(data.user));
+    sessionStorage.setItem(
+      "clothstock_user",
+      JSON.stringify(data.user)
+    );
 
     setToken(data.token);
     setUser(data.user);
 
     return data.user;
-  }, []);
-
-  // Log out
-  const logout = useCallback(() => {
-    sessionStorage.removeItem("clothstock_token");
-    sessionStorage.removeItem("clothstock_user");
-
-    setToken("");
-    setUser(null);
   }, []);
 
   // Verify the current login session
@@ -87,6 +103,10 @@ export function AuthProvider({ children }) {
 
       const data = await response.json();
 
+      if (!data.user) {
+        throw new Error("Session response is missing user.");
+      }
+
       setToken(savedToken);
       setUser(data.user);
 
@@ -102,7 +122,7 @@ export function AuthProvider({ children }) {
     }
   }, [logout]);
 
-  // Verify the session once when the provider mounts.
+  // Verify the session when the provider mounts
   useEffect(() => {
     verifySession();
   }, [verifySession]);

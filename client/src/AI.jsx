@@ -6,10 +6,23 @@ import { useAuth } from "./AuthContext";
 const API_URL = "http://localhost:5000";
 const LOW_STOCK_LIMIT = 5;
 
-const QUICK_QUESTIONS = [
-  "Which products have 5 or fewer items in stock?",
-  "Which products are out of stock?",
-  "Show my inventory insights.",
+
+const QUICK_QUESTION_TITLES = [
+  "Total Products",
+  "Low Stock Items",
+  "Restocking Advice",
+  "Sales Revenue",
+  "Top Selling Products",
+  "Inventory Summary",
+];
+
+const QUICK_QUESTION_DESCRIPTIONS = [
+  "Check your inventory count",
+  "Identify products running low",
+  "Find products to replenish",
+  "Review your sales performance",
+  "Discover your bestsellers",
+  "Get a quick inventory overview",
 ];
 
 function ClothStockAIAvatar() {
@@ -996,11 +1009,15 @@ function AI() {
                         disabled={loading || !token}
                         onClick={() => askQuestion(item)}
                       >
-                        <span className="cs-suggestion-icon">
-                          {["◉", "!", "↗"][index]}
+                        <span className="cs-suggestion-top">
+                          <span className="cs-suggestion-icon">
+                            {["▣", "!", "🛒", "↗", "♧", "◔"][index]}
+                          </span>
+                          <span className="cs-suggestion-arrow" aria-hidden="true">↗</span>
                         </span>
-                        <span>{item}</span>
-                        <span className="cs-suggestion-arrow">↗</span>
+                        <span className="cs-suggestion-title">{QUICK_QUESTION_TITLES[index]}</span>
+                        <span className="cs-suggestion-description">{QUICK_QUESTION_DESCRIPTIONS[index]}</span>
+                        <span className="cs-suggestion-prompt">{item}</span>
                       </button>
                     ))}
                   </div>
@@ -1130,30 +1147,7 @@ function AI() {
               )}
             </section>
 
-            <section className="cs-side-card">
-              <div className="cs-side-card-heading">
-                <div className="cs-side-icon cs-side-icon-soft">↗</div>
-                <div>
-                  <h3>Quick questions</h3>
-                  <p>Start with a common task</p>
-                </div>
-              </div>
-              <div className="cs-quick-list">
-                {QUICK_QUESTIONS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={loading || !token}
-                    onClick={() => askQuestion(item)}
-                  >
-                    <span>{item}</span><span>→</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            
-<section className="cs-side-card cs-activity-card">
+            <section className="cs-side-card cs-activity-card">
   <div className="cs-side-card-heading">
     <div className="cs-side-icon">◷</div>
     <div>
@@ -3159,6 +3153,94 @@ function AI() {
           .cs-ai-float-panel .cs-composer textarea,.cs-ai-float-panel .cs-composer input{min-width:0!important;max-width:100%!important}
           .cs-ai-float-panel .cs-suggestions{grid-template-columns:minmax(0,1fr)!important}
         }
+
+        /* Mobile staff-account chat: force viewport-sized layout and flexible children */
+        @media (max-width: 760px) {
+          .cs-ai-float-shell { position: fixed !important; z-index: 99999 !important; }
+          .cs-ai-float-panel,
+          .cs-ai-float-panel.is-expanded {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            min-width: 0 !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            max-height: none !important;
+            margin: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-sizing: border-box !important;
+          }
+          .cs-ai-float-windowbar { flex: 0 0 58px !important; min-width: 0 !important; padding: 7px 10px !important; }
+          .cs-ai-float-windowbrand { flex: 1 1 auto !important; min-width: 0 !important; }
+          .cs-ai-float-windowbrand strong { font-size: 13px !important; }
+          .cs-ai-float-windowbrand small { font-size: 10px !important; }
+          .cs-ai-float-windowcontrols { flex: 0 0 auto !important; }
+          .cs-ai-float-content {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            height: calc(100% - 58px) !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+          }
+          .cs-ai-float-panel .cs-ai,
+          .cs-ai-float-panel .cs-main,
+          .cs-ai-float-panel .cs-workspace,
+          .cs-ai-float-panel .cs-chat-column {
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 1 1 auto !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            height: 100% !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+          }
+          .cs-ai-float-panel .cs-chat-scroll {
+            flex: 1 1 0 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            padding: 12px 10px !important;
+            box-sizing: border-box !important;
+          }
+          .cs-ai-float-panel .cs-message,
+          .cs-ai-float-panel .cs-message-body {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+          }
+          .cs-ai-float-panel .cs-result-panel,
+          .cs-ai-float-panel .cs-table-wrap {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+          }
+          .cs-ai-float-panel .cs-table { min-width: 560px !important; }
+          .cs-ai-float-panel .cs-composer-area {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 8px !important;
+            padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+            box-sizing: border-box !important;
+          }
+          .cs-ai-float-panel .cs-composer { width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; }
+          .cs-ai-float-panel .cs-composer textarea { width: 100% !important; min-width: 0 !important; max-width: 100% !important; font-size: 16px !important; box-sizing: border-box !important; }
+          .cs-ai-float-panel .cs-composer-bottom { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-wrap: wrap !important; gap: 8px !important; }
+          .cs-ai-float-panel .cs-send { flex: 0 0 auto !important; min-height: 42px !important; }
+        }
         @media(prefers-reduced-motion:reduce){.cs-ai-float-launcher,.cs-ai-float-panel{animation:none;transition:none}}
         /* Final interaction polish: history toggle is available on desktop and mobile. */
         .cs-ai-float-panel .cs-ai .cs-menu-button {
@@ -3196,6 +3278,53 @@ function AI() {
         .cs-ai-float-windowcontrols button:hover { transform:translateY(-2px); background:#ffffff35!important; box-shadow:0 5px 14px #062b1a25; }
         .cs-ai-float-launcher { transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease!important; }
         .cs-ai-float-launcher:hover { transform:translateY(-4px) scale(1.045)!important; box-shadow:0 16px 38px #176b4545!important; }
+
+        /* Polished Quick Questions cards */
+        .cs-ai .cs-suggestions {
+          display:grid!important;
+          grid-template-columns:repeat(3,minmax(0,1fr))!important;
+          gap:12px!important;
+          width:100%;
+          margin:22px 0 10px!important;
+        }
+        .cs-ai .cs-suggestion {
+          position:relative!important;
+          display:flex!important;
+          min-width:0!important;
+          min-height:155px!important;
+          flex-direction:column!important;
+          align-items:flex-start!important;
+          justify-content:flex-start!important;
+          gap:6px!important;
+          padding:15px!important;
+          border:1px solid #e2eee6!important;
+          border-radius:16px!important;
+          background:linear-gradient(145deg,#fff,#f8fcf9)!important;
+          box-shadow:0 4px 14px rgba(23,75,49,.05)!important;
+          color:#183b2c!important;
+          text-align:left!important;
+          transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease!important;
+        }
+        .cs-ai .cs-suggestion:hover:not(:disabled) {
+          transform:translateY(-3px)!important;
+          border-color:#9ed9b8!important;
+          background:#fff!important;
+          box-shadow:0 12px 26px rgba(23,107,69,.12)!important;
+        }
+        .cs-ai .cs-suggestion-top { display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:5px; }
+        .cs-ai .cs-suggestion-icon { display:grid!important;place-items:center;width:39px!important;height:39px!important;flex-shrink:0;border-radius:12px!important;background:#e6f7ed!important;color:#168451!important;font-size:20px!important;font-weight:800; }
+        .cs-ai .cs-suggestion-arrow { display:block!important;margin-left:auto;color:#168451!important;font-size:18px;transition:transform .2s ease; }
+        .cs-ai .cs-suggestion:hover:not(:disabled) .cs-suggestion-arrow { transform:translate(3px,-3px); }
+        .cs-ai .cs-suggestion-title { color:#183b2c;font-size:13px;font-weight:750;line-height:1.4; }
+        .cs-ai .cs-suggestion-description { color:#75847b;font-size:11px;font-weight:400;line-height:1.5; }
+        .cs-ai .cs-suggestion-prompt { margin-top:4px;padding-right:10px;color:#3d6651;font-size:10px;font-weight:500;line-height:1.45; }
+        .cs-ai .cs-suggestion:nth-child(2) .cs-suggestion-icon,.cs-ai .cs-suggestion:nth-child(6) .cs-suggestion-icon { background:#fff0ed!important;color:#e34f42!important; }
+        .cs-ai .cs-suggestion:nth-child(3) .cs-suggestion-icon { background:#edf4ff!important;color:#3479dc!important; }
+        .cs-ai .cs-suggestion:nth-child(4) .cs-suggestion-icon { background:#f3edff!important;color:#8556d6!important; }
+        .cs-ai .cs-suggestion:nth-child(5) .cs-suggestion-icon { background:#fff4df!important;color:#d89516!important; }
+        @media(max-width:900px) { .cs-ai .cs-suggestions { grid-template-columns:repeat(2,minmax(0,1fr))!important; } }
+        @media(max-width:560px) { .cs-ai .cs-suggestions { grid-template-columns:1fr!important;gap:10px!important; } .cs-ai .cs-suggestion { min-height:125px!important;padding:13px!important; } }
+
         @media(prefers-reduced-motion:reduce) {
           .cs-ai-float-panel,.cs-ai-float-panel *, .cs-ai-float-launcher { animation:none!important; transition:none!important; }
         }
@@ -3269,6 +3398,6 @@ function ProductTable({ products }) {
       </table>
     </div>
   );
-}
+} 
 
 export default AI;

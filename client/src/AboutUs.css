@@ -63,3 +63,290 @@
 
 @media(prefers-reduced-motion:reduce){.about-launcher,.about-close,.about-manage-toggle{transition:none}.about-overlay,.about-dialog,.about-developer-card,.about-editor{animation:none}}
 
+
+
+/* ===== CLOTHSTOCK ABOUT US BRANDING ===== */
+
+.about-project {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 28px 20px 30px;
+  text-align: center;
+  border-bottom: 1px solid #dcebe1;
+}
+
+.about-project-icon {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 21px;
+  background: linear-gradient(145deg, #078443, #004d2b);
+  color: #fff;
+  box-shadow: 0 9px 24px rgba(0, 100, 49, 0.18);
+}
+
+.about-project-icon svg {
+  width: 44px;
+  height: 44px;
+}
+
+.about-project-brand {
+  margin: 0;
+  color: #064b2d;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 850;
+  letter-spacing: -1.3px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.about-project-brand span {
+  color: #159b50;
+}
+
+.about-project-subtitle {
+  margin: 10px 0 0;
+  color: #78867e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.about-project-accent {
+  width: 48px;
+  height: 4px;
+  margin: 16px auto;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #087a3d, #35d77c);
+}
+
+.about-description {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto 17px;
+  color: #52665a;
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.about-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.about-tags span {
+  padding: 8px 12px;
+  border: 1px solid #d7ebdf;
+  border-radius: 999px;
+  background: #fff;
+  color: #26734a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ===== MOBILE RESPONSIVENESS ===== */
+
+@media (max-width: 640px) {
+  .about-project {
+    padding: 20px 6px 24px;
+  }
+
+  .about-project-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 17px;
+    margin-bottom: 12px;
+  }
+
+  .about-project-icon svg {
+    width: 38px;
+    height: 38px;
+  }
+
+  .about-project-brand {
+    font-size: 30px;
+    letter-spacing: -1px;
+  }
+
+  .about-project-subtitle {
+    font-size: 12px;
+  }
+
+  .about-description {
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  .about-tags {
+    gap: 6px;
+  }
+
+  .about-tags span {
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+}
+
+
+/* ======================================
+   CLOTHSTOCK ABOUT US - DESIGN UPDATE
+   Bigger developer photos and clean cards
+   ====================================== */
+
+/* Developer cards */
+.about-developer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.about-developer-card {
+  min-width: 0;
+  padding: 22px 16px;
+  border: 1px solid #d5ebde;
+  border-radius: 20px;
+  background: linear-gradient(155deg, #ffffff, #f4fcf7);
+  box-shadow: 0 8px 24px rgba(11, 99, 51, 0.06);
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.about-developer-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 30px rgba(11, 99, 51, 0.12);
+}
+
+/* BIGGER DEVELOPER PROFILE PICTURES */
+.about-avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 35%;
+  border: 4px solid #fff;
+  box-sizing: border-box;
+}
+
+/* Make the existing profile picture circular and larger */
+.about-avatar:not(.about-avatar-placeholder) {
+  width: 172px;
+  height: 172px;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  box-shadow: 0 0 0 5px #e0f5e8;
+}
+
+/* Bigger initial placeholder when no photo is uploaded */
+.about-avatar-placeholder {
+  width: 172px;
+  height: 172px;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #d8f4e4, #bce9ce);
+  color: #087943;
+  font-size: 56px;
+  font-weight: 800;
+  box-shadow: 0 0 0 5px #e0f5e8;
+}
+
+/* Developer names */
+.about-developer-card h4 {
+  margin: 0;
+  color: #12482e;
+  font-size: 18px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* Developer role badge */
+.about-role {
+  display: inline-block;
+  margin: 9px 0 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #d9f4e4;
+  color: #17633e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Developer introduction */
+.about-developer-card > p {
+  margin: 0 0 15px;
+  color: #64776b;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+/* Profile management buttons */
+.about-profile-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: auto;
+}
+
+/* ======================================
+   TABLET
+   ====================================== */
+@media (max-width: 1000px) {
+  .about-developer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .about-avatar:not(.about-avatar-placeholder),
+  .about-avatar-placeholder {
+    width: 160px;
+    height: 160px;
+  }
+}
+
+/* ======================================
+   MOBILE
+   ====================================== */
+@media (max-width: 560px) {
+  .about-developer-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .about-developer-card {
+    padding: 22px 16px;
+  }
+
+  .about-avatar:not(.about-avatar-placeholder),
+  .about-avatar-placeholder {
+    width: min(68vw, 220px);
+    height: min(68vw, 220px);
+    margin-bottom: 17px;
+  }
+
+  .about-developer-card h4 {
+    font-size: 19px;
+  }
+
+  .about-role {
+    font-size: 12px;
+  }
+
+  .about-developer-card > p {
+    max-width: 320px;
+    font-size: 13px;
+  }
+
+  .about-profile-actions button {
+    padding: 10px 15px;
+  }
+}

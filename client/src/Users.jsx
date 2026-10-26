@@ -605,14 +605,19 @@ function Users() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="users-logout-button"
-          onClick={logout}
-        >
-          <span aria-hidden="true">↪</span>
-          Logout
-        </button>
+        
+<button
+  type="button"
+  className="users-logout-button"
+  onClick={() => {
+    console.log("ADMIN LOGOUT BUTTON CLICKED");
+    logout();
+  }}
+>
+  <span aria-hidden="true">↪</span>
+  Logout
+</button>
+
       </section>
     </div>
   );

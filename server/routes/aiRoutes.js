@@ -1,6 +1,8 @@
 
 const express = require("express");
 const mongoose = require("mongoose");
+const router = express.Router();
+
 const { authenticateToken } = require("./auth");
 const {
   Product,
@@ -8,627 +10,1143 @@ const {
   Conversation,
 } = require("../models/aiModels");
 
-const router = express.Router();
-const LOW_STOCK_LIMIT = 5;
-
 router.use(authenticateToken);
 
-function getQuestionType(question) {
-  const q = question.toLowerCase();
+/* ==========================================
+   CLOTHSTOCK AI MEMORY — MANAGE PEOPLE
+========================================== */
 
-  if (
-    q.includes("insight") ||
-    q.includes("summary") ||
-    q.includes("overview") ||
-    q.includes("stock status") ||
-    q.includes("inventory status") ||
-    q.includes("inventory report") ||
-    q.includes("restock report") ||
-    q.includes("how is my inventory") ||
-    q.includes("how many products") ||
-    q.includes("total stock") ||
-    q.includes("stock analysis")
-  ) {
-    return "insights";
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({
+      message: "Only administrators can manage AI Memory.",
+    });
   }
 
-  if (
-    q.includes("out of stock") ||
-    q.includes("out-of-stock") ||
-    q.includes("zero stock") ||
-    q.includes("no stock")
-  ) {
-    return "out-of-stock";
-  }
-
-  if (
-    q.includes("low stock") ||
-    q.includes("low-stock") ||
-    q.includes("running low") ||
-    q.includes("restock") ||
-    q.includes("reorder") ||
-    q.includes("5 or fewer") ||
-    q.includes("5 or less") ||
-    q.includes("five or fewer") ||
-    q.includes("five or less") ||
-    q.includes("low quantity") ||
-    q.includes("stock levels")
-  ) {
-    return "low-stock";
-  }
-
-  if (
-    q.includes("all products") ||
-    q.includes("list products") ||
-    q.includes("show products") ||
-    q.includes("inventory list") ||
-    q.includes("all inventory")
-  ) {
-    return "all-products";
-  }
-
-  return "help";
+  next();
 }
 
-function formatPHP(value) {
-  return `PHP ${(Number(value) || 0).toFixed(2)}`;
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function getClassmateResponse(question) {
-  const q = question
-    .toLowerCase()
-    .replace(/[?!.,]/g, "")
-    .trim();
+// GET /api/ai/people?search=Stanley
+router.get("/people", requireAdmin, async (req, res) => {
+  try {
+    const search = String(req.query.search || "").trim().slice(0, 100);
 
-  const classmates = [
-    {
-      names: ["stanley", "who is stanley"],
-      answer:
-        "Stanley is a 3rd-year student who loves EDP. He created me and this website."
-    },
-    {
-      names: ["jhon vergo milca", "jhon milca"],
-      answer:
-        "Jhon Vergo Milca is known as a hacker. He lives in Mambajao, Maasin City, and he's Stanley's classmate."
-    },
-    {
-      names: ["jhon davis", "john davis"],
-      answer:
-        "John Davis is an AI assistant of your instructor in EDP. He's also part of Stanley's classmate circle."
-    },
-    {
-      names: ["brylle laroa", "brylle"],
-      answer:
-        "Brylle Laroa is also known as a web hacker. He lives in Basak, Maasin City, and he's Stanley's classmate."
-    },
-    {
-      names: ["lorence"],
-      answer:
-        "Lorence is the funny guy in Stanley's classmate circle."
-    },
-    {
-      names: ["aaron loquias", "aaron"],
-      answer:
-        "Aaron Loquias loves cooking sisig. He's Stanley's classmate."
-    },
-    {
-      names: ["christian lloid", "christian loid", "christian"],
-      answer:
-        "Christian Lloid lives in Mabini, Macrohon, Southern Leyte. He's Stanley's classmate."
-    },
-    {
-      names: ["edrian"],
-      answer:
-        "Edrian is described as a hacker, and his boarding house is said to be behind a salon. He's Stanley's classmate."
-    },
-    {
-      names: ["vam"],
-      answer:
-        "Vam is known for experimenting with network adapters and networking. Vam is Stanley's classmate."
-    },
-    {
-      names: ["jay-ar", "jay ar", "jayar"],
-      answer:
-        "Jay-ar is a volleyball varsity player and is known as Stanley's 'pre.' He's Stanley's classmate."
-    },
-    {
-      names: ["jevie"],
-      answer:
-        "Jevie is known among the classmates as a hacker. He's Stanley's classmate."
-    },
-    {
-      names: ["john relap"],
-      answer:
-        "John Relap is known as the tallest guy in the group. He's Stanley's classmate."
-    },
-    {
-      names: ["yves andre marquiez", "yves andre", "yves"],
-      answer:
-        "Yves Andre Marquiez is a DOTA player who lives in Mambajao, Maasin City. He's Stanley's classmate."
-    },
-    {
-      names: ["rodel"],
-      answer:
-        "Rodel is a marathon runner and collects the daily ₱10 contribution. He's Stanley's classmate."
+    const filter = search
+      ? {
+          $or: [
+            { name: { $regex: escapeRegex(search), $options: "i" } },
+            { description: { $regex: escapeRegex(search), $options: "i" } },
+            { aliases: { $regex: escapeRegex(search), $options: "i" } },
+          ],
+        }
+      : {};
+
+    const people = await PersonKnowledge.find(filter)
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({ people });
+  } catch (error) {
+    console.error("AI Memory list error:", error);
+    res.status(500).json({
+      message: "Unable to load saved people.",
+    });
+  }
+});
+
+// POST /api/ai/people
+router.post("/people", requireAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const description = String(req.body?.description || "").trim();
+
+    const aliases = Array.isArray(req.body?.aliases)
+      ? req.body.aliases
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      : String(req.body?.aliases || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 20);
+
+    if (!name || name.length > 100) {
+      return res.status(400).json({
+        message: "Name is required and must be under 100 characters.",
+      });
     }
-  ];
 
-  for (const person of classmates) {
-    const matched = person.names.some((name) => {
-      const normalizedName = name.toLowerCase();
-      return (
-        q === normalizedName ||
-        q === `who is ${normalizedName}` ||
-        q === `tell me about ${normalizedName}` ||
-        q === `do you know ${normalizedName}`
-      );
+    if (!description || description.length > 2000) {
+      return res.status(400).json({
+        message: "Description is required and must be under 2,000 characters.",
+      });
+    }
+
+    const normalizedName = name.toLowerCase();
+
+    const existing = await PersonKnowledge.findOne({ normalizedName });
+
+    if (existing) {
+      return res.status(409).json({
+        message: "This person already exists. Edit the existing entry instead.",
+      });
+    }
+
+    const person = await PersonKnowledge.create({
+      name,
+      normalizedName,
+      description,
+      aliases,
     });
 
-    if (matched) return person.answer;
+    res.status(201).json({ person });
+  } catch (error) {
+    console.error("AI Memory create error:", error);
+
+    res.status(500).json({
+      message: "Unable to save this person.",
+    });
+  }
+});
+
+// PUT /api/ai/people/:id
+router.put("/people/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid person ID.",
+      });
+    }
+
+    const person = await PersonKnowledge.findById(id);
+
+    if (!person) {
+      return res.status(404).json({
+        message: "Person not found.",
+      });
+    }
+
+    const name = String(req.body?.name ?? person.name).trim();
+    const description = String(
+      req.body?.description ?? person.description
+    ).trim();
+
+    const aliases = Array.isArray(req.body?.aliases)
+      ? req.body.aliases
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      : String(req.body?.aliases ?? person.aliases.join(", "))
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 20);
+
+    if (
+      !name ||
+      name.length > 100 ||
+      !description ||
+      description.length > 2000
+    ) {
+      return res.status(400).json({
+        message: "Enter a name and description within the allowed lengths.",
+      });
+    }
+
+    const normalizedName = name.toLowerCase();
+
+    const duplicate = await PersonKnowledge.findOne({
+      normalizedName,
+      _id: { $ne: person._id },
+    });
+
+    if (duplicate) {
+      return res.status(409).json({
+        message: "Another saved person already uses that name.",
+      });
+    }
+
+    person.name = name;
+    person.normalizedName = normalizedName;
+    person.description = description;
+    person.aliases = aliases;
+
+    await person.save();
+
+    res.json({ person });
+  } catch (error) {
+    console.error("AI Memory update error:", error);
+
+    res.status(500).json({
+      message: "Unable to update this person.",
+    });
+  }
+});
+
+// DELETE /api/ai/people/:id
+router.delete("/people/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid person ID.",
+      });
+    }
+
+    const person = await PersonKnowledge.findByIdAndDelete(id);
+
+    if (!person) {
+      return res.status(404).json({
+        message: "Person not found.",
+      });
+    }
+
+    res.json({
+      message: `${person.name} was removed from AI Memory.`,
+    });
+  } catch (error) {
+    console.error("AI Memory delete error:", error);
+
+    res.status(500).json({
+      message: "Unable to delete this person.",
+    });
+  }
+});
+
+const LOW_STOCK_LIMIT = 5;
+const MAX_PRODUCTS = 500;
+const MAX_SALES = 5000;
+
+
+/* =========================
+   CLOTHSTOCK AI - PERSONAL KNOWLEDGE
+========================= */
+
+const PERSONAL_KNOWLEDGE = {
+  stanley: {
+    name: "Stanley",
+    description:
+      "Stanley is a 3rd-year student who loves programming. He created ClothStock AI and this website by himself."
+  },
+
+  lorence: {
+    name: "Lorence",
+    description:
+      "Lorence is the funny guy in the room."
+  },
+
+  jevie: {
+    name: "Jevie",
+    description:
+      "Jevie is known as the hacker of motors."
+  },
+
+  brylle: {
+    name: "Brylle",
+    description:
+      "Brylle is Stanley's classmate. He's also known as a web hacker."
+  },
+
+  loid: {
+    name: "Loid",
+    description:
+      "Loid is also known as a web and network hacker."
+  },
+
+  vam: {
+    name: "Vam",
+    description:
+      "Vam is known as a network hacker."
+  },
+
+  rodel: {
+    name: "Rodel",
+    description:
+      "Rodel is a marathon runner who collects 10 bucks per day."
+  },
+
+  "yar-ar": {
+    name: "Jay-Ar (Yar-Ar)",
+    description:
+      "Jay-Ar, also called Yar-Ar, is a varsity player and Stanley's classmate."
+  },
+
+  edgar: {
+    name: "Edgar (Bernard)",
+    description:
+      "Edgar, also known as Bernard, is a dancer of ITRIX."
+  },
+
+  rai: {
+    name: "Rai",
+    description:
+      "Rai is known as the rockstar in the room."
+  },
+
+  "john davis": {
+    name: "John Davis",
+    description:
+      "John Davis is an AI assistant of your instructor in EDP."
+  },
+
+  edrian: {
+    name: "Edrian",
+    description:
+      "Edrian is known as the glass man in the room."
+  },
+
+  jualo: {
+    name: "Jualo",
+    description:
+      "Jualo is the tallest guy in the room."
+  }
+};
+
+function identifyPerson(question) {
+  const q = question
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[?!.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Match names only when the user is asking who someone is.
+  const asksWho =
+    /\b(who is|who's|who are|tell me about|introduce)\b/.test(q);
+
+  if (!asksWho) return null;
+
+  const aliases = {
+    "john davis": ["john davis"],
+    "yar-ar": ["yar-ar", "jay-ar", "jay ar"],
+    stanley: ["stanley"],
+    lorence: ["lorence"],
+    jevie: ["jevie"],
+    brylle: ["brylle"],
+    loid: ["loid"],
+    vam: ["vam"],
+    rodel: ["rodel"],
+    edgar: ["edgar", "bernard"],
+    rai: ["rai"],
+    edrian: ["edrian"],
+    jualo: ["jualo"]
+  };
+
+  for (const [key, names] of Object.entries(aliases)) {
+    for (const name of names) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`\\b${escaped}\\b`, "i");
+
+      if (pattern.test(q)) {
+        return PERSONAL_KNOWLEDGE[key];
+      }
+    }
   }
 
   return null;
 }
 
-function validConversationId(id) {
-  return (
-    typeof id === "string" &&
-    mongoose.isValidObjectId(id)
-  );
+
+const money = (value) =>
+  `₱${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const number = (value) =>
+  Number(value || 0).toLocaleString("en-PH");
+
+const safeNum = (value) =>
+  Number.isFinite(Number(value)) ? Number(value) : 0;
+
+const isPrivileged = (req, res) => {
+  if (!["admin", "staff"].includes(req.user?.role)) {
+    res.status(403).json({ message: "Access denied." });
+    return false;
+  }
+
+  return true;
+};
+
+const validId = (id) =>
+  mongoose.Types.ObjectId.isValid(id);
+
+/* =====================================================
+   NATURAL LANGUAGE QUESTION CLASSIFICATION
+===================================================== */
+
+function classify(question) {
+  const q = String(question || "")
+    .toLowerCase()
+    .replace(/[?!.,]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (
+    /^(hi|hello|hey|hiya|good morning|good afternoon|good evening|greetings|howdy|kumusta)$/.test(q)
+  ) {
+    return "greeting";
+  }
+
+  if (
+    /\b(thank you|thanks|thank u|thx)\b/.test(q)
+  ) {
+    return "thanks";
+  }
+
+  if (
+    /\b(what can you do|what do you do|help me|help|your capabilities|how can you help)\b/.test(q)
+  ) {
+    return "help";
+  }
+
+  // Sales rankings must be detected before generic inventory questions.
+  if (
+    /\b(top|best|highest|most|largest|greatest|number one|number 1)\b/.test(q) &&
+    /\b(sell|selling|seller|sold|sales|sale|revenue|earning|earner|profitable|performing|popular)\b/.test(q)
+  ) {
+    if (
+      /\b(profit|profitable|margin|earnings after cost)\b/.test(q)
+    ) {
+      return "top-profit";
+    }
+
+    if (
+      /\b(unit|units|quantity|quantities|volume|most sold|best seller|best selling|top selling)\b/.test(q)
+    ) {
+      return "top-units";
+    }
+
+    return "top-revenue";
+  }
+
+  if (
+    /\b(best seller|bestseller|best selling|best-selling|top selling|top-selling|most sold|fastest selling|popular products|product ranking)\b/.test(q)
+  ) {
+    return "top-units";
+  }
+
+  if (
+    /\b(low stock|running low|need restocking|needs restocking|need to restock|reorder|restock|below minimum|almost out)\b/.test(q)
+  ) {
+    return "low-stock";
+  }
+
+  if (
+    /\b(out of stock|zero stock|no stock|stockout|stock outs|unavailable products|sold out)\b/.test(q)
+  ) {
+    return "out-stock";
+  }
+
+  if (
+    /\b(gross profit|net profit|profit margin|profitability|profit|profitable)\b/.test(q)
+  ) {
+    return "profit";
+  }
+
+  if (
+    /\b(inventory|stock|products?)\b/.test(q) &&
+    /\b(worth|value|valuation|valued|cost value|selling value)\b/.test(q)
+  ) {
+    return "inventory-value";
+  }
+
+  if (
+    /\b(how many|number of|count of|count|total number)\b/.test(q) &&
+    /\b(products?|items?|product records?)\b/.test(q)
+  ) {
+    return "product-count";
+  }
+
+  if (
+    /\b(show|list|display|view|find|search|all|every|which|what are|give me)\b/.test(q) &&
+    /\b(products?|items?)\b/.test(q) &&
+    !/\b(sold|sales|selling|seller|revenue|profit)\b/.test(q)
+  ) {
+    return /\b(table|tabular|spreadsheet)\b/.test(q)
+      ? "inventory-table"
+      : "product-list";
+  }
+
+  if (
+    /\b(table|tabular|spreadsheet)\b/.test(q) &&
+    /\b(inventory|stock|products?)\b/.test(q)
+  ) {
+    return "inventory-table";
+  }
+
+  if (
+    /\b(sales summary|sales overview|sales report|revenue|total sales|sales performance|transactions|units sold|sales today|sales this month|sales this week)\b/.test(q)
+  ) {
+    return "sales";
+  }
+
+  if (
+    /\b(inventory summary|summarize inventory|summarise inventory|inventory overview|inventory insights|stock overview|inventory report|dashboard|overall inventory)\b/.test(q)
+  ) {
+    return "inventory-summary";
+  }
+
+  if (
+    /\b(inventory|stock|products|overview|summary|insights|report|total value)\b/.test(q)
+  ) {
+    return "inventory-summary";
+  }
+
+  return "help";
 }
 
-// --------------------------------------------------
-// CONVERSATION HISTORY
-// --------------------------------------------------
+/* =====================================================
+   DATABASE HELPERS
+===================================================== */
 
-// List the current user's saved conversations.
+async function getProducts() {
+  return Product.find({})
+    .select(
+      "name code category size color quantity costPrice sellingPrice createdAt updatedAt"
+    )
+    .sort({ name: 1 })
+    .limit(MAX_PRODUCTS)
+    .lean();
+}
+
+async function getSales() {
+  return Sale.find({})
+    .populate("productId", "name code category costPrice sellingPrice")
+    .sort({ soldAt: -1, createdAt: -1 })
+    .limit(MAX_SALES)
+    .lean();
+}
+
+function calculateInventory(products) {
+  const totalUnits = products.reduce(
+    (sum, p) => sum + safeNum(p.quantity),
+    0
+  );
+
+  const lowStock = products.filter(
+    (p) =>
+      safeNum(p.quantity) > 0 &&
+      safeNum(p.quantity) <= LOW_STOCK_LIMIT
+  );
+
+  const outOfStock = products.filter(
+    (p) => safeNum(p.quantity) <= 0
+  );
+
+  const costValue = products.reduce(
+    (sum, p) =>
+      sum + safeNum(p.quantity) * safeNum(p.costPrice),
+    0
+  );
+
+  const sellingValue = products.reduce(
+    (sum, p) =>
+      sum + safeNum(p.quantity) * safeNum(p.sellingPrice),
+    0
+  );
+
+  return {
+    totalProducts: products.length,
+    totalUnits,
+    lowStockCount: lowStock.length,
+    outOfStockCount: outOfStock.length,
+    inventoryCostValue: costValue,
+    inventorySellingValue: sellingValue,
+    lowStockLimit: LOW_STOCK_LIMIT,
+  };
+}
+
+function calculateSales(sales) {
+  const totalRevenue = sales.reduce(
+    (sum, s) => sum + safeNum(s.totalAmount),
+    0
+  );
+
+  const totalUnitsSold = sales.reduce(
+    (sum, s) => sum + safeNum(s.quantity),
+    0
+  );
+
+  const ranking = new Map();
+
+  for (const sale of sales) {
+    const product = sale.productId;
+    const productId =
+      product && typeof product === "object"
+        ? String(product._id)
+        : String(product || "unknown");
+
+    const current = ranking.get(productId) || {
+      productId,
+      name:
+        product && typeof product === "object"
+          ? product.name || "Unknown product"
+          : "Unknown product",
+      code:
+        product && typeof product === "object"
+          ? product.code || "—"
+          : "—",
+      units: 0,
+      revenue: 0,
+      transactions: 0,
+    };
+
+    current.units += safeNum(sale.quantity);
+    current.revenue += safeNum(sale.totalAmount);
+    current.transactions += 1;
+
+    ranking.set(productId, current);
+  }
+
+  const rankedProducts = [...ranking.values()];
+
+  return {
+    totalTransactions: sales.length,
+    totalRevenue,
+    totalUnitsSold,
+    rankedProducts,
+  };
+}
+
+async function getConversation(req, requestedId) {
+  const userId = req.user.id || req.user._id;
+
+  if (requestedId && validId(requestedId)) {
+    const existing = await Conversation.findOne({
+      _id: requestedId,
+      userId,
+    });
+
+    if (existing) return existing;
+  }
+
+  return Conversation.create({
+    userId,
+    title: "New conversation",
+    messages: [],
+  });
+}
+
+async function saveTurn(conversation, question, answer, results) {
+  conversation.messages.push(
+    { role: "user", content: question },
+    {
+      role: "assistant",
+      content: answer,
+      results,
+    }
+  );
+
+  if (conversation.title === "New conversation") {
+    conversation.title = question.slice(0, 80);
+  }
+
+  await conversation.save();
+}
+
+/* =====================================================
+   CONVERSATION HISTORY
+===================================================== */
+
 router.get("/conversations", async (req, res) => {
   try {
-    const conversations = await Conversation.find({
-      userId: req.user.id,
-    })
-      .select("title createdAt updatedAt")
+    const userId = req.user.id || req.user._id;
+
+    const conversations = await Conversation.find({ userId })
+      .select("title updatedAt createdAt messages")
       .sort({ updatedAt: -1 })
       .limit(100)
       .lean();
 
-    return res.status(200).json({ conversations });
+    res.json({
+      conversations: conversations.map((c) => ({
+        _id: c._id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        createdAt: c.createdAt,
+        messageCount: c.messages?.length || 0,
+      })),
+    });
   } catch (error) {
-    console.error("Load conversations error:", error.message);
-    return res.status(500).json({
-      message: "Failed to load conversation history.",
+    console.error("Conversation list error:", error);
+    res.status(500).json({
+      message: "I couldn't load your conversations. Please try again.",
     });
   }
 });
 
-// Start a new conversation.
 router.post("/conversations", async (req, res) => {
   try {
     const conversation = await Conversation.create({
-      userId: req.user.id,
+      userId: req.user.id || req.user._id,
       title: "New conversation",
       messages: [],
     });
 
-    return res.status(201).json({ conversation });
+    res.status(201).json({ conversation });
   } catch (error) {
-    console.error("Create conversation error:", error.message);
-    return res.status(500).json({
-      message: "Failed to create a conversation.",
+    console.error("Create conversation error:", error);
+    res.status(500).json({
+      message: "I couldn't create a new conversation.",
     });
   }
 });
 
-// Open a saved conversation.
 router.get("/conversations/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (!validConversationId(id)) {
+    if (!validId(req.params.id)) {
       return res.status(400).json({
-        message: "Invalid conversation ID.",
+        message: "That conversation ID is invalid.",
       });
     }
 
     const conversation = await Conversation.findOne({
-      _id: id,
-      userId: req.user.id,
+      _id: req.params.id,
+      userId: req.user.id || req.user._id,
     }).lean();
 
     if (!conversation) {
       return res.status(404).json({
-        message: "Conversation not found.",
+        message: "I couldn't find that conversation.",
       });
     }
 
-    return res.status(200).json({ conversation });
+    res.json({ conversation });
   } catch (error) {
-    console.error("Open conversation error:", error.message);
-    return res.status(500).json({
-      message: "Failed to open the conversation.",
+    console.error("Open conversation error:", error);
+    res.status(500).json({
+      message: "I couldn't open that conversation.",
     });
   }
 });
 
-// Delete one of the current user's conversations.
 router.delete("/conversations/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (!validConversationId(id)) {
+    if (!validId(req.params.id)) {
       return res.status(400).json({
-        message: "Invalid conversation ID.",
+        message: "That conversation ID is invalid.",
       });
     }
 
     const deleted = await Conversation.findOneAndDelete({
-      _id: id,
-      userId: req.user.id,
+      _id: req.params.id,
+      userId: req.user.id || req.user._id,
     });
 
     if (!deleted) {
       return res.status(404).json({
-        message: "Conversation not found.",
+        message: "I couldn't find that conversation.",
       });
     }
 
-    return res.status(200).json({
-      message: "Conversation deleted successfully.",
-    });
+    res.json({ message: "Conversation deleted successfully." });
   } catch (error) {
-    console.error("Delete conversation error:", error.message);
-    return res.status(500).json({
-      message: "Failed to delete the conversation.",
+    console.error("Delete conversation error:", error);
+    res.status(500).json({
+      message: "I couldn't delete that conversation.",
     });
   }
 });
 
-// Save both messages to the conversation.
-async function saveConversationMessage(
-  userId,
-  conversationId,
-  question,
-  answer
-) {
-  let conversation;
-
-  if (conversationId) {
-    if (!validConversationId(conversationId)) {
-      const error = new Error("Invalid conversation ID.");
-      error.status = 400;
-      throw error;
-    }
-
-    conversation = await Conversation.findOne({
-      _id: conversationId,
-      userId,
-    });
-
-    if (!conversation) {
-      const error = new Error("Conversation not found.");
-      error.status = 404;
-      throw error;
-    }
-  } else {
-    conversation = new Conversation({
-      userId,
-      title: question.slice(0, 80) || "New conversation",
-      messages: [],
-    });
-  }
-
-  if (conversation.messages.length === 0) {
-    conversation.title = question.slice(0, 80) || "New conversation";
-  }
-
-  conversation.messages.push(
-    { role: "user", content: question },
-    { role: "assistant", content: answer }
-  );
-
-  await conversation.save();
-
-  return conversation._id.toString();
-}
-
-
- // --------------------------------------------------
- // LIVE INVENTORY INSIGHTS
- // --------------------------------------------------
+/* =====================================================
+   LIVE INVENTORY INSIGHTS
+===================================================== */
 
 router.get("/insights", async (req, res) => {
   try {
-    if (!req.user || !["admin", "staff"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You do not have permission to view inventory insights.",
-      });
-    }
+    if (!isPrivileged(req, res)) return;
 
-    const [
-      totalProducts,
-      lowStockCount,
-      outOfStockCount,
-      stockTotals,
-      lowStockProducts,
-      outOfStockProducts,
-    ] = await Promise.all([
-      Product.countDocuments({}),
-      Product.countDocuments({
-        quantity: { $gt: 0, $lte: LOW_STOCK_LIMIT },
-      }),
-      Product.countDocuments({
-        quantity: { $lte: 0 },
-      }),
-      Product.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalUnits: { $sum: { $ifNull: ["$quantity", 0] } },
-          },
-        },
-      ]),
-      Product.find({
-        quantity: { $gt: 0, $lte: LOW_STOCK_LIMIT },
-      })
-        .select("name code category size color quantity")
-        .sort({ quantity: 1, name: 1 })
-        .limit(100)
-        .lean(),
-      Product.find({
-        quantity: { $lte: 0 },
-      })
-        .select("name code category size color quantity")
-        .sort({ name: 1 })
-        .limit(100)
-        .lean(),
-    ]);
+    const products = await getProducts();
+    const insights = calculateInventory(products);
 
-    return res.status(200).json({
-      insights: {
-        totalProducts,
-        totalUnits: stockTotals[0]?.totalUnits || 0,
-        lowStockCount,
-        outOfStockCount,
-        lowStockLimit: LOW_STOCK_LIMIT,
-      },
-      lowStockProducts,
-      outOfStockProducts,
-    });
+    res.json({ insights });
   } catch (error) {
-    console.error("Live inventory insights error:", error);
-
-    return res.status(500).json({
-      message: "Unable to load inventory insights.",
+    console.error("Inventory insights error:", error);
+    res.status(500).json({
+      message: "I couldn't calculate your inventory insights.",
     });
   }
 });
 
-// --------------------------------------------------
-// INVENTORY ASSISTANT + CLASSMATE RESPONSES
-// --------------------------------------------------
+/* =====================================================
+   CLOTHSTOCK AI CHAT
+===================================================== */
 
 router.post("/chat", async (req, res) => {
   try {
-    if (!req.user || !["admin", "staff"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You do not have permission to use ClothStock AI.",
-      });
-    }
+    if (!isPrivileged(req, res)) return;
 
-    const question =
-      typeof req.body?.question === "string"
-        ? req.body.question.trim()
-        : "";
-
-    const conversationId = req.body?.conversationId || null;
+    const question = String(req.body?.question || "").trim();
 
     if (!question) {
       return res.status(400).json({
-        message: "Please enter a question.",
+        message: "Please enter a question so I can help.",
       });
     }
 
     if (question.length > 1000) {
       return res.status(400).json({
-        message: "Your question must be 1000 characters or fewer.",
+        message: "Please keep your question under 1,000 characters.",
       });
     }
 
-    // 1. Try a general/classmate response first.
-    const classmateAnswer = getClassmateResponse(question);
+    
+const person = identifyPerson(question);
 
-    if (classmateAnswer) {
-      const savedConversationId = await saveConversationMessage(
-        req.user.id,
-        conversationId,
-        question,
-        classmateAnswer
-      );
+const intent = person ? "personal-knowledge" : classify(question);
+const results = {};
+let answer = "";
 
-      return res.status(200).json({
-        message: "Question answered and conversation saved.",
-        answer: classmateAnswer,
-        products: [],
-        intent: "general-conversation",
-        conversationId: savedConversationId,
-      });
-    }
+if (person) {
+  answer = `Here's what I know about ${person.name}:
 
-    // 2. If it isn't a classmate question, process inventory requests.
-    const intent = getQuestionType(question);
+${person.description}
 
-    let answer;
-    let products = [];
-    let insights;
+Want to ask about someone else?`;
+}
 
-    if (intent === "help") {
+
+    if (intent === "greeting") {
       answer =
-        "Hi! I'm ClothStock AI. I can help you check inventory, identify low-stock products, find out-of-stock items, and review stock insights. You can also ask me about Stanley and his classmates.";
+        "Hello! 👋 Welcome to ClothStock AI. I'm here to help you understand your inventory, check stock levels, discover your best-selling products, and analyze your sales. What would you like to explore today?";
 
-    } else if (intent === "insights") {
-      const [
-        totalProducts,
-        lowStockCount,
-        outOfStockCount,
-        stockTotals,
-        lowStockProducts,
-      ] = await Promise.all([
-        Product.countDocuments({}),
-
-        Product.countDocuments({
-          quantity: { $gt: 0, $lte: LOW_STOCK_LIMIT },
-        }),
-
-        Product.countDocuments({
-          quantity: { $lte: 0 },
-        }),
-
-        Product.aggregate([
-          {
-            $group: {
-              _id: null,
-              totalUnits: {
-                $sum: { $ifNull: ["$quantity", 0] },
-              },
-            },
-          },
-        ]),
-
-        Product.find({
-          quantity: { $lte: LOW_STOCK_LIMIT },
-        })
-          .select("name code category size color quantity")
-          .sort({ quantity: 1, name: 1 })
-          .limit(500)
-          .lean(),
-      ]);
-
-      const totalUnits = stockTotals[0]?.totalUnits || 0;
-
+    } else if (intent === "thanks") {
       answer =
-        `Your inventory currently contains ${totalProducts} product records ` +
-        `and ${totalUnits} units in stock. ` +
-        `${lowStockCount} product(s) have between 1 and ${LOW_STOCK_LIMIT} items, ` +
-        `while ${outOfStockCount} product(s) are out of stock.`;
+        "You're very welcome! 😊 I'm happy to help with your ClothStock inventory. Would you like to explore your sales performance or check which products need restocking?";
 
-      if (outOfStockCount > 0) {
-        answer += " Prioritize the out-of-stock products for review.";
-      } else if (lowStockCount > 0) {
-        answer += " Review the low-stock products and consider restocking them.";
-      } else {
-        answer +=
-          " No products currently need attention under the 5-unit stock threshold.";
-      }
-
-      products = lowStockProducts;
-
-      insights = {
-        totalProducts,
-        totalUnits,
-        lowStockCount,
-        outOfStockCount,
-        lowStockLimit: LOW_STOCK_LIMIT,
-      };
+    } else if (person) {
+  // Personal knowledge response is already prepared above.
+}    else if (intent === "help") {
+      answer =
+        "Of course! 😊 I can analyze the records in your ClothStock database. Try asking me:\n\n" +
+        "• Which product has the highest sales?\n" +
+        "• Which products sell the most units?\n" +
+        "• What is my total sales revenue?\n" +
+        "• Which products are running low?\n" +
+        "• What is my inventory worth?\n" +
+        "• What is my estimated gross profit?\n\n" +
+        "I'll calculate the available figures from your saved records and explain the results.";
 
     } else {
-      let filter = {};
+      const needsProducts = [
+        "product-count",
+        "inventory-value",
+        "product-list",
+        "inventory-table",
+        "inventory-summary",
+        "low-stock",
+        "out-stock",
+        "profit",
+        "top-profit",
+      ].includes(intent);
 
-      if (intent === "low-stock") {
-        filter = {
-          quantity: { $gte: 0, $lte: LOW_STOCK_LIMIT },
+      const needsSales = [
+        "sales",
+        "top-units",
+        "top-revenue",
+        "top-profit",
+        "profit",
+      ].includes(intent);
+
+      const products = needsProducts ? await getProducts() : [];
+      const sales = needsSales ? await getSales() : [];
+
+      const inventory = calculateInventory(products);
+      const salesSummary = calculateSales(sales);
+
+      if (intent === "product-count") {
+        results.insights = {
+          totalProducts: inventory.totalProducts,
         };
-      } else if (intent === "out-of-stock") {
-        filter = {
-          quantity: { $lte: 0 },
-        };
-      } else if (intent === "all-products") {
-        filter = {};
+
+        answer =
+          `Absolutely! 😊 You currently have ${number(inventory.totalProducts)} product records in your inventory.`;
       }
 
-      products = await Product.find(filter)
-        .select("name code category size color quantity")
-        .sort({ quantity: 1, name: 1 })
-        .limit(500)
-        .lean();
+      else if (intent === "inventory-value") {
+        const asksCost =
+          /\b(cost|purchase|at cost|investment)\b/i.test(question);
 
-      if (intent === "low-stock") {
+        const asksSelling =
+          /\b(selling|retail|potential sales|if all sold)\b/i.test(question);
+
+        if (asksCost && !asksSelling) {
+          results.insights = {
+            inventoryCostValue: inventory.inventoryCostValue,
+          };
+
+          answer =
+            `Here's your inventory cost valuation. 📦 The current stock represents ${money(inventory.inventoryCostValue)} in recorded product cost. This is calculated from each product's available quantity multiplied by its recorded cost price.`;
+        } else if (asksSelling && !asksCost) {
+          results.insights = {
+            inventorySellingValue: inventory.inventorySellingValue,
+          };
+
+          answer =
+            `Here's the potential selling value of your current stock. 💰 If all available units sold at their recorded selling prices, the total would be ${money(inventory.inventorySellingValue)} before expenses, discounts, and other adjustments.`;
+        } else {
+          results.insights = {
+            inventoryCostValue: inventory.inventoryCostValue,
+            inventorySellingValue: inventory.inventorySellingValue,
+          };
+
+          answer =
+            `Here's your inventory valuation. 📊\n\n` +
+            `• Recorded stock cost: ${money(inventory.inventoryCostValue)}\n` +
+            `• Potential selling value: ${money(inventory.inventorySellingValue)}\n\n` +
+            `The potential selling value isn't profit; it represents expected sales before expenses and other adjustments.`;
+        }
+      }
+
+      else if (
+        intent === "product-list" ||
+        intent === "inventory-table"
+      ) {
+        results.products = products;
+        results.display =
+          intent === "inventory-table" ? "table" : "products";
+
+        answer = products.length
+          ? `Here you go! 😊 I found ${number(products.length)} product records in the inventory data retrieved for this report. You can review the product details below.`
+          : "I checked the retrieved inventory records, but there are no products to display.";
+      }
+
+      else if (
+        intent === "low-stock" ||
+        intent === "out-stock"
+      ) {
+        const chosen =
+          intent === "low-stock"
+            ? products.filter(
+                (p) =>
+                  safeNum(p.quantity) > 0 &&
+                  safeNum(p.quantity) <= LOW_STOCK_LIMIT
+              )
+            : products.filter(
+                (p) => safeNum(p.quantity) <= 0
+              );
+
+        results.products = chosen;
+        results.display = "products";
+
+        answer = chosen.length
+          ? intent === "low-stock"
+            ? `I found ${number(chosen.length)} product(s) that may need your attention. ⚠️ These items have between 1 and ${LOW_STOCK_LIMIT} units remaining. Consider reviewing the product cards below and planning your next restock.`
+            : `Good news: I've identified ${number(chosen.length)} product(s) with no available stock. These items may need replenishment before you can fulfill new orders.`
+          : intent === "low-stock"
+            ? `Good news! 🎉 I couldn't find any products within the low-stock range of 1–${LOW_STOCK_LIMIT} units in the retrieved inventory records.`
+            : "Great news! 🎉 No out-of-stock products were found in the retrieved inventory records.";
+      }
+
+      else if (intent === "inventory-summary") {
+        results.insights = inventory;
+
         answer =
-          products.length === 0
-            ? `No products currently have ${LOW_STOCK_LIMIT} or fewer items in stock.`
-            : `Found ${products.length} product(s) with ${LOW_STOCK_LIMIT} or fewer items in stock. Review these products for possible restocking.`;
+          `Here's your inventory snapshot! 📊\n\n` +
+          `• Products: ${number(inventory.totalProducts)}\n` +
+          `• Units on hand: ${number(inventory.totalUnits)}\n` +
+          `• Low-stock products: ${number(inventory.lowStockCount)}\n` +
+          `• Out-of-stock products: ${number(inventory.outOfStockCount)}\n` +
+          `• Stock cost value: ${money(inventory.inventoryCostValue)}\n` +
+          `• Potential selling value: ${money(inventory.inventorySellingValue)}\n\n` +
+          (inventory.lowStockCount > 0 || inventory.outOfStockCount > 0
+            ? "Recommendation: review the stock alerts and prioritize products that need replenishment."
+            : "Your retrieved stock records show no low-stock or out-of-stock items.");
+      }
 
-      } else if (intent === "out-of-stock") {
+      else if (
+        intent === "top-units" ||
+        intent === "top-revenue" ||
+        intent === "top-profit"
+      ) {
+        const costById = new Map(
+          products.map((p) => [
+            String(p._id),
+            safeNum(p.costPrice),
+          ])
+        );
+
+        const ranked = salesSummary.rankedProducts.map((p) => {
+          const cost = costById.get(String(p.productId));
+
+          return {
+            ...p,
+            estimatedProfit:
+              cost === undefined
+                ? null
+                : p.revenue - p.units * cost,
+          };
+        });
+
+        if (intent === "top-units") {
+          ranked.sort((a, b) => b.units - a.units);
+        } else if (intent === "top-profit") {
+          ranked.sort(
+            (a, b) =>
+              (b.estimatedProfit ?? -Infinity) -
+              (a.estimatedProfit ?? -Infinity)
+          );
+        } else {
+          ranked.sort((a, b) => b.revenue - a.revenue);
+        }
+
+        const top = ranked.slice(0, 10);
+
+        results.table = top;
+        results.display = "top-products";
+
+        if (!top.length) {
+          answer =
+            "I'd be happy to find your leading products, but I couldn't find any recorded sales in the retrieved sales records yet. Once sales are recorded against products, I can rank them for you.";
+        } else {
+          const winner = top[0];
+
+          if (intent === "top-units") {
+            answer =
+              `I checked your recorded sales! 🏆 Your top-selling product is **${winner.name}**` +
+              `${winner.code && winner.code !== "—" ? ` (code: ${winner.code})` : ""}, ` +
+              `with ${number(winner.units)} unit(s) sold across ${number(winner.transactions)} transaction(s).\n\n` +
+              `Its recorded sales revenue is ${money(winner.revenue)}. I've ranked the leading products below by units sold.`;
+          } else if (intent === "top-profit") {
+            if (winner.estimatedProfit === null) {
+              answer =
+                `I found recorded sales for ${number(top.length)} product(s), but I couldn't reliably rank gross profit because some products no longer have a matching cost price in the retrieved inventory. I can still compare their recorded revenue and units sold.`;
+            } else {
+              answer =
+                `I analyzed your recorded sales alongside the current product cost prices. 📈 The highest estimated gross-profit product is **${winner.name}**, with an estimated gross profit of ${money(winner.estimatedProfit)}.\n\n` +
+                `This estimate uses current costs, not historical costs at the time of sale. I've listed the leading products below.`;
+            }
+          } else {
+            answer =
+              `I checked your recorded sales! 🏆 The product with the highest recorded sales revenue is **${winner.name}**` +
+              `${winner.code && winner.code !== "—" ? ` (code: ${winner.code})` : ""}.\n\n` +
+              `• Recorded revenue: ${money(winner.revenue)}\n` +
+              `• Units sold: ${number(winner.units)}\n` +
+              `• Transactions: ${number(winner.transactions)}\n\n` +
+              `I've ranked the leading products below by revenue. Note that revenue is not the same as profit.`;
+          }
+        }
+      }
+
+      else if (intent === "profit") {
+        const costById = new Map(
+          products.map((p) => [
+            String(p._id),
+            safeNum(p.costPrice),
+          ])
+        );
+
+        let estimatedProfit = 0;
+        let unknownCostSales = 0;
+
+        for (const sale of sales) {
+          const productId = String(
+            sale.productId?._id || sale.productId || ""
+          );
+
+          if (!costById.has(productId)) {
+            unknownCostSales++;
+            continue;
+          }
+
+          estimatedProfit +=
+            safeNum(sale.totalAmount) -
+            safeNum(sale.quantity) * costById.get(productId);
+        }
+
+        results.insights = {
+          estimatedGrossProfit: estimatedProfit,
+          totalRevenue: salesSummary.totalRevenue,
+          totalTransactions: salesSummary.totalTransactions,
+          unitsSold: salesSummary.totalUnitsSold,
+          uncostedTransactions: unknownCostSales,
+          note:
+            "Estimate uses current product cost prices. Historical costs and operating expenses are not included.",
+        };
+
         answer =
-          products.length === 0
-            ? "Good news! There are no out-of-stock products in your inventory."
-            : `Found ${products.length} out-of-stock product(s). Consider prioritizing these items for restocking.`;
+          `Here's your estimated gross-profit analysis. 📈\n\n` +
+          `• Recorded revenue: ${money(salesSummary.totalRevenue)}\n` +
+          `• Estimated gross profit: ${money(estimatedProfit)}\n` +
+          `• Retrieved transactions: ${number(salesSummary.totalTransactions)}\n` +
+          `• Units sold: ${number(salesSummary.totalUnitsSold)}\n\n` +
+          `Please note: this estimate uses current product cost prices and excludes operating expenses. ` +
+          (unknownCostSales
+            ? `${number(unknownCostSales)} transaction(s) couldn't be matched to a current product cost and were excluded from the profit calculation.`
+            : "Historical cost changes may affect the accuracy of the estimate.");
+      }
 
-      } else {
-        const totalProducts = await Product.countDocuments({});
+      else {
+        results.insights = {
+          totalTransactions: salesSummary.totalTransactions,
+          unitsSold: salesSummary.totalUnitsSold,
+          totalRevenue: salesSummary.totalRevenue,
+        };
 
         answer =
-          `Showing ${products.length} product record(s) from your inventory. ` +
-          `Your database contains ${totalProducts} product record(s) in total.`;
+          `Here's your sales overview! 💰\n\n` +
+          `• Retrieved transactions: ${number(salesSummary.totalTransactions)}\n` +
+          `• Units sold: ${number(salesSummary.totalUnitsSold)}\n` +
+          `• Recorded revenue: ${money(salesSummary.totalRevenue)}\n\n` +
+          `These figures are calculated from the latest ${number(MAX_SALES)} sales records retrieved, or fewer if your database contains fewer records.`;
       }
     }
 
-    // 3. Save the question and answer to conversation history.
-    const savedConversationId = await saveConversationMessage(
-      req.user.id,
-      conversationId,
-      question,
-      answer
+    // Persist the actual answer and structured analysis for conversation history.
+    const conversation = await getConversation(
+      req,
+      req.body?.conversationId
     );
 
-    return res.status(200).json({
-      message: "Question answered and conversation saved.",
+    await saveTurn(
+      conversation,
+      question,
       answer,
-      products,
+      results
+    );
+
+    // Return only data relevant to the current request.
+    res.json({
+      answer,
       intent,
-      conversationId: savedConversationId,
-
-      ...(intent === "low-stock"
-        ? { threshold: LOW_STOCK_LIMIT }
-        : {}),
-
-      ...(insights ? { insights } : {}),
+      conversationId: conversation._id,
+      ...(results.products ? { products: results.products } : {}),
+      ...(results.insights ? { insights: results.insights } : {}),
+      ...(results.table ? { table: results.table } : {}),
+      ...(results.display ? { display: results.display } : {}),
     });
-
   } catch (error) {
-    if (error.status === 400 || error.status === 404) {
-      return res.status(error.status).json({
-        message: error.message,
-      });
-    }
+    console.error("ClothStock AI analysis error:", error);
 
-    console.error("ClothStock AI error:", error);
-
-    return res.status(500).json({
-      message: "Unable to check inventory right now. Please try again.",
+    res.status(500).json({
+      message:
+        "I'm sorry, I couldn't finish analyzing your records just now. Please try again.",
     });
   }
 });
 
-// --------------------------------------------------
-// PDF REPORT GENERATOR
-// --------------------------------------------------
+/* =====================================================
+   PDF REPORT DATA
+===================================================== */
 
 router.post("/report", async (req, res) => {
   try {
-    if (!req.user || !["admin", "staff"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You do not have permission to generate reports.",
-      });
-    }
+    if (!isPrivileged(req, res)) return;
 
-    const reportType =
-      typeof req.body?.reportType === "string"
-        ? req.body.reportType
-        : "inventory";
+    const reportType = req.body?.reportType;
 
     if (!["inventory", "sales"].includes(reportType)) {
       return res.status(400).json({
-        message: "Choose either an inventory report or a sales report.",
+        message: "Please choose an inventory or sales report.",
       });
     }
 
@@ -638,237 +1156,51 @@ router.post("/report", async (req, res) => {
       });
     }
 
-    const generatedAt = new Date();
+    const products = await getProducts();
 
-    const lines = [
-      "CLOTHSTOCK REPORT",
-      "=================",
-      `Report type: ${
-        reportType === "sales" ? "Sales Summary" : "Inventory Summary"
-      }`,
-      `Generated: ${generatedAt.toLocaleString("en-PH", {
-        timeZone: "Asia/Manila",
-      })}`,
-      "",
-    ];
-
-    // INVENTORY REPORT
     if (reportType === "inventory") {
-      const [
-        totalProducts,
-        lowStockProducts,
-        outOfStockProducts,
-        stockSummary,
-        allProducts,
-      ] = await Promise.all([
-        Product.countDocuments({}),
-        Product.find({
-          quantity: { $gt: 0, $lte: LOW_STOCK_LIMIT },
-        })
-          .select("name code category size color quantity costPrice sellingPrice")
-          .sort({ quantity: 1, name: 1 })
-          .lean(),
-        Product.find({
-          quantity: { $lte: 0 },
-        })
-          .select("name code category size color quantity costPrice sellingPrice")
-          .sort({ name: 1 })
-          .lean(),
-        Product.aggregate([
-          {
-            $group: {
-              _id: null,
-              totalUnits: { $sum: { $ifNull: ["$quantity", 0] } },
-              costValue: {
-                $sum: {
-                  $multiply: [
-                    { $ifNull: ["$quantity", 0] },
-                    { $ifNull: ["$costPrice", 0] },
-                  ],
-                },
-              },
-              sellingValue: {
-                $sum: {
-                  $multiply: [
-                    { $ifNull: ["$quantity", 0] },
-                    { $ifNull: ["$sellingPrice", 0] },
-                  ],
-                },
-              },
-            },
-          },
-        ]),
-        Product.find({})
-          .select("name code category size color quantity costPrice sellingPrice")
-          .sort({ name: 1 })
-          .lean(),
-      ]);
+      const insights = calculateInventory(products);
 
-      const summary = stockSummary[0] || {
-        totalUnits: 0,
-        costValue: 0,
-        sellingValue: 0,
-      };
-
-      lines.push(
-        `Total product records: ${totalProducts}`,
-        `Total units in stock: ${summary.totalUnits || 0}`,
-        `Low-stock products (1-${LOW_STOCK_LIMIT} units): ${lowStockProducts.length}`,
-        `Out-of-stock products: ${outOfStockProducts.length}`,
-        `Estimated inventory cost value: ${formatPHP(summary.costValue)}`,
-        `Potential selling value: ${formatPHP(summary.sellingValue)}`,
-        "",
-        "ALL INVENTORY PRODUCTS",
-        "-----------------------"
+      const lowStockProducts = products.filter(
+        (p) =>
+          safeNum(p.quantity) > 0 &&
+          safeNum(p.quantity) <= LOW_STOCK_LIMIT
       );
 
-      if (allProducts.length === 0) {
-        lines.push("No inventory products found.");
-      } else {
-        allProducts.forEach((product) => {
-          lines.push(
-            `${product.name || "Unnamed product"} | ` +
-              `Code: ${product.code || "N/A"} | ` +
-              `Category: ${product.category || "N/A"} | ` +
-              `Size: ${product.size || "N/A"} | ` +
-              `Color: ${product.color || "N/A"} | ` +
-              `Quantity: ${product.quantity ?? 0} | ` +
-              `Cost: ${formatPHP(product.costPrice)} | ` +
-              `Selling: ${formatPHP(product.sellingPrice)}`
-          );
-        });
-      }
+      const outOfStockProducts = products.filter(
+        (p) => safeNum(p.quantity) <= 0
+      );
 
-      lines.push("", "LOW-STOCK PRODUCTS", "------------------");
-
-      if (lowStockProducts.length === 0) {
-        lines.push(`No products currently have 1-${LOW_STOCK_LIMIT} units in stock.`);
-      } else {
-        lowStockProducts.forEach((product) => {
-          lines.push(
-            `${product.name || "Unnamed product"} | ` +
-              `Code: ${product.code || "N/A"} | ` +
-              `Category: ${product.category || "N/A"} | ` +
-              `Quantity: ${product.quantity ?? 0}`
-          );
-        });
-      }
-
-      lines.push("", "OUT-OF-STOCK PRODUCTS", "---------------------");
-
-      if (outOfStockProducts.length === 0) {
-        lines.push("No out-of-stock products found.");
-      } else {
-        outOfStockProducts.forEach((product) => {
-          lines.push(
-            `${product.name || "Unnamed product"} | ` +
-              `Code: ${product.code || "N/A"} | ` +
-              `Category: ${product.category || "N/A"} | ` +
-              `Quantity: ${product.quantity ?? 0}`
-          );
-        });
-      }
-
-      const report = {
-        reportType,
-        generatedAt: generatedAt.toISOString(),
-        summary: {
-          totalProducts,
-          totalUnits: summary.totalUnits || 0,
-          lowStockCount: lowStockProducts.length,
-          outOfStockCount: outOfStockProducts.length,
-          costValue: summary.costValue || 0,
-          sellingValue: summary.sellingValue || 0,
+      return res.json({
+        report: {
+          generatedAt: new Date(),
+          summary: insights,
+          lowStockProducts,
+          outOfStockProducts,
+          products,
         },
-        products: allProducts,
-        lowStockProducts,
-        outOfStockProducts,
-        text: lines.join("\n"),
-      };
-
-      return res.status(200).json({
-        message: "Inventory report generated successfully.",
-        report,
       });
     }
 
-    // SALES REPORT (ADMIN ONLY)
-    const sales = await Sale.find({})
-      .sort({ soldAt: -1, createdAt: -1 })
-      .limit(5000)
-      .populate("productId", "name code")
-      .lean();
+    const sales = await getSales();
+    const summary = calculateSales(sales);
 
-    const totalTransactions = sales.length;
-    const totalUnitsSold = sales.reduce(
-      (total, sale) => total + (Number(sale.quantity) || 0),
-      0
-    );
-    const totalSales = sales.reduce(
-      (total, sale) => total + (Number(sale.totalAmount) || 0),
-      0
-    );
-
-    lines.push(
-      `Transactions included: ${totalTransactions}`,
-      `Units sold: ${totalUnitsSold}`,
-      `Total recorded sales: ${formatPHP(totalSales)}`,
-      "",
-      "RECENT SALES",
-      "------------"
-    );
-
-    if (sales.length === 0) {
-      lines.push("No sales records found.");
-    } else {
-      sales.slice(0, 100).forEach((sale) => {
-        const productName =
-          sale.productId?.name || "Product unavailable";
-        const productCode = sale.productId?.code || "N/A";
-
-        const saleDate =
-          sale.soldAt || sale.createdAt
-            ? new Date(sale.soldAt || sale.createdAt).toLocaleDateString(
-                "en-PH",
-                { timeZone: "Asia/Manila" }
-              )
-            : "Date unavailable";
-
-        lines.push(
-          `${saleDate} | ${productName} (${productCode}) | ` +
-            `Quantity: ${sale.quantity || 0} | ` +
-            `Unit price: ${formatPHP(sale.unitPrice)} | ` +
-            `Total: ${formatPHP(sale.totalAmount)}`
-        );
-      });
-
-      if (sales.length > 100) {
-        lines.push(
-          "",
-          "Showing the latest 100 transactions in the detail list."
-        );
-      }
-    }
-
-    return res.status(200).json({
-      message: "Sales report generated successfully.",
+    return res.json({
       report: {
-        reportType,
-        generatedAt: generatedAt.toISOString(),
+        generatedAt: new Date(),
         summary: {
-          totalTransactions,
-          totalUnitsSold,
-          totalSales,
+          totalTransactions: summary.totalTransactions,
+          totalQuantity: summary.totalUnitsSold,
+          totalSales: summary.totalRevenue,
         },
         sales,
-        text: lines.join("\n"),
       },
     });
   } catch (error) {
     console.error("ClothStock report error:", error);
 
-    return res.status(500).json({
-      message: "Unable to generate the report right now.",
+    res.status(500).json({
+      message: "I couldn't generate that report. Please try again.",
     });
   }
 });
