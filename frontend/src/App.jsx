@@ -1,5 +1,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Dashboard from "./Dashboard";
 import Sales from "./Sales";
 import Products from "./Products";
@@ -27,58 +28,43 @@ const QUICK_QUESTIONS = [
 
 function ClothStockAIAvatar() {
   return (
-    <span className="cs-ai-profile-picture" role="img" aria-label="ClothStock AI futuristic robot avatar">
+    <span
+      className="cs-ai-profile-picture"
+      role="img"
+      aria-label="Cute ClothStock AI robot assistant"
+    >
       <svg viewBox="0 0 96 96" aria-hidden="true" focusable="false">
         <defs>
-          <linearGradient id="clothbot-shell" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#eafff5" />
-            <stop offset="48%" stopColor="#a9f5d1" />
-            <stop offset="100%" stopColor="#4bc58b" />
+          <linearGradient id="clothstock-robot-shell" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#cdeedd" />
           </linearGradient>
-          <linearGradient id="clothbot-bg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#123f35" />
-            <stop offset="100%" stopColor="#061e22" />
+          <linearGradient id="clothstock-robot-screen" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#123e35" />
+            <stop offset="100%" stopColor="#071f27" />
           </linearGradient>
-          <linearGradient id="clothbot-glass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#183e4a" />
-            <stop offset="100%" stopColor="#071c28" />
-          </linearGradient>
-          <linearGradient id="clothbot-eye" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#d9fff4" />
-            <stop offset="100%" stopColor="#3cf6b0" />
-          </linearGradient>
-          <filter id="clothbot-glow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur stdDeviation="2.3" result="blur" />
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
         </defs>
-        <circle cx="48" cy="48" r="47" fill="#052f26" />
-        <circle cx="48" cy="48" r="43.5" fill="url(#clothbot-bg)" stroke="#31df98" strokeWidth="1.5" />
-        <circle cx="48" cy="48" r="38" fill="none" stroke="#53efb0" strokeWidth=".8" strokeDasharray="3 5" opacity=".5" />
-        {/* antenna */}
-        <path d="M48 17v9" stroke="#c6ffe5" strokeWidth="4" strokeLinecap="round" />
-        <circle cx="48" cy="14" r="5.5" fill="#54ffba" stroke="#e5fff4" strokeWidth="1.8" filter="url(#clothbot-glow)" />
-        {/* side audio/utility modules */}
-        <rect x="12" y="39" width="12" height="24" rx="5" fill="#54c990" stroke="#d9ffec" strokeWidth="1.5" />
-        <rect x="72" y="39" width="12" height="24" rx="5" fill="#54c990" stroke="#d9ffec" strokeWidth="1.5" />
-        <path d="M15 45h6M15 50h6M75 45h6M75 50h6" stroke="#07533e" strokeWidth="1.8" strokeLinecap="round" />
-        {/* robot head */}
-        <path d="M27 28Q27 24 33 24h30q6 0 6 6v35q0 8-9 8H36q-9 0-9-8z" fill="url(#clothbot-shell)" stroke="#e5fff4" strokeWidth="1.5" />
-        <path d="M33 24h30q6 0 6 6v5H27v-5q0-6 6-6" fill="#f3fff9" opacity=".55" />
-        {/* glossy face display */}
-        <rect x="30" y="36" width="36" height="25" rx="9" fill="url(#clothbot-glass)" stroke="#1c7557" strokeWidth="1.2" />
-        <g filter="url(#clothbot-glow)">
-          <rect x="36" y="43" width="7" height="9" rx="3.5" fill="url(#clothbot-eye)" />
-          <rect x="53" y="43" width="7" height="9" rx="3.5" fill="url(#clothbot-eye)" />
-        </g>
-        <path d="M41 56q7 5 14 0" fill="none" stroke="#80ffd0" strokeWidth="2" strokeLinecap="round" />
-        {/* chest badge */}
-        <path d="M40 68h16l-2 7H42z" fill="#08764e" />
-        <path d="M45 69h6v3h-6z" fill="#9dffda" />
-        {/* tiny sparkles */}
-        <path d="M77 20l1.8 4.2L83 26l-4.2 1.8L77 32l-1.8-4.2L71 26l4.2-1.8z" fill="#c5ffe6" />
-        <circle cx="19" cy="24" r="1.8" fill="#7bffc8" />
-        <circle cx="78" cy="70" r="1.5" fill="#7bffc8" />
+        <circle cx="48" cy="48" r="47" fill="#dff7e9" />
+        <circle cx="48" cy="48" r="43" fill="#168451" />
+        {/* Small side ear pieces */}
+        <rect x="8" y="37" width="12" height="24" rx="6" fill="#f8fffb" stroke="#123f32" strokeWidth="2.5" />
+        <rect x="76" y="37" width="12" height="24" rx="6" fill="#f8fffb" stroke="#123f32" strokeWidth="2.5" />
+        {/* Rounded robot head */}
+        <rect x="16" y="13" width="64" height="64" rx="22" fill="url(#clothstock-robot-shell)" stroke="#123f32" strokeWidth="3" />
+        <path d="M29 15 Q48 8 67 15" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
+        {/* Dark face screen */}
+        <rect x="22" y="27" width="52" height="37" rx="14" fill="url(#clothstock-robot-screen)" stroke="#24594b" strokeWidth="1.5" />
+        {/* Friendly glowing eyes */}
+        <ellipse cx="35" cy="43" rx="4.5" ry="6.5" fill="#66f4ed" />
+        <ellipse cx="61" cy="43" rx="4.5" ry="6.5" fill="#66f4ed" />
+        <circle cx="36" cy="41" r="1.4" fill="#e5fffd" />
+        <circle cx="62" cy="41" r="1.4" fill="#e5fffd" />
+        {/* Smile */}
+        <path d="M39 52 Q48 60 57 52" fill="none" stroke="#66f4ed" strokeWidth="3.2" strokeLinecap="round" />
+        {/* Tiny clothing tag on the chest */}
+        <path d="M35 69 L48 75 L61 69" fill="#ffffff" stroke="#168451" strokeWidth="2" strokeLinejoin="round" />
+        <rect x="42" y="69" width="12" height="6" rx="2" fill="#43d59b" stroke="#168451" strokeWidth="1.5" />
+        <path d="M48 5 V10 M45.5 7.5 H50.5" stroke="#baffd5" strokeWidth="2" strokeLinecap="round" />
       </svg>
     </span>
   );
@@ -107,6 +93,9 @@ function normalizeMessage(message, index) {
 function AI() {
   const requestInProgressRef = useRef(false);
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatClosing, setChatClosing] = useState(false);
+  const closeTimerRef = useRef(null);
+  const launchTimerRef = useRef(null);
   const [aiHintVisible, setAiHintVisible] = useState(true);
 
   // Rotate the launcher hint: show for 5 seconds, hide for 5 seconds.
@@ -122,20 +111,72 @@ function AI() {
 
   // Release keyboard focus before hiding the chat panel. This prevents the
   // closed panel's textarea from retaining focus and blocking page controls.
+  const openChat = useCallback(() => {
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+    setChatClosing(false);
+    setChatExpanded(true);
+  }, []);
+
   const closeChat = useCallback(() => {
     const activeElement = document.activeElement;
     if (activeElement instanceof HTMLElement && activeElement.closest(".cs-ai-float-panel")) {
       activeElement.blur();
     }
-    setChatExpanded(false);
+    if (!chatExpanded || chatClosing) return;
+    setChatClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      setChatExpanded(false);
+      setChatClosing(false);
+      closeTimerRef.current = null;
+    }, 2600);
+  }, [chatExpanded, chatClosing]);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    if (launchTimerRef.current) window.clearTimeout(launchTimerRef.current);
   }, []);
 
-  // Let the sidebar open this floating assistant without mounting a second copy.
+  // Keep the center bottom-navigation rocket synchronized with the chat lifecycle.
   useEffect(() => {
-    const openAssistant = () => setChatExpanded((open) => !open);
+    window.dispatchEvent(new CustomEvent("clothstock:ai-state", {
+      detail: {
+        open: chatExpanded && !chatClosing,
+        closing: chatClosing,
+      },
+    }));
+  }, [chatExpanded, chatClosing]);
+
+  // Launch the center-nav robot first, then reveal the conversation after 1.5 seconds.
+  // A second click during launch cancels it; when open, the same event closes the chat.
+  useEffect(() => {
+    const openAssistant = () => {
+      if (chatExpanded || chatClosing) {
+        if (launchTimerRef.current) {
+          window.clearTimeout(launchTimerRef.current);
+          launchTimerRef.current = null;
+        }
+        closeChat();
+        return;
+      }
+
+      if (launchTimerRef.current) {
+        window.clearTimeout(launchTimerRef.current);
+        launchTimerRef.current = null;
+        window.dispatchEvent(new CustomEvent("clothstock:ai-state", { detail: { open: false } }));
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent("clothstock:ai-state", { detail: { launching: true } }));
+      launchTimerRef.current = window.setTimeout(() => {
+        launchTimerRef.current = null;
+        openChat();
+      }, 1500);
+    };
+
     window.addEventListener("clothstock:open-ai", openAssistant);
     return () => window.removeEventListener("clothstock:open-ai", openAssistant);
-  }, []);
+  }, [chatExpanded, chatClosing, closeChat, openChat]);
 
   const { token, user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -779,7 +820,7 @@ function AI() {
   return (
     <div className="cs-ai-float-shell">
       
-        <button type="button" className="cs-ai-float-launcher" aria-label="Chat with ClothStock AI" onClick={() => (chatExpanded ? closeChat() : setChatExpanded(true))}>
+        <button type="button" className={`cs-ai-float-launcher ${chatExpanded && !chatClosing ? "is-chat-open" : ""} ${chatClosing ? "is-chat-closing" : ""}`} aria-label={chatExpanded && !chatClosing ? "Close ClothStock AI chat" : "Chat with ClothStock AI"} onClick={() => (chatExpanded ? closeChat() : openChat())}>
           <span className={`cs-ai-launcher-label ${aiHintVisible && !chatExpanded ? "is-hint-visible" : "is-hint-hidden"}`} aria-hidden="true">Chat with <strong>ClothStock AI</strong><i>Ask about your inventory</i></span>
           <span className="cs-ai-launcher-orbit" aria-hidden="true" />
           <ClothStockAIAvatar />
@@ -787,7 +828,7 @@ function AI() {
         </button>
       
       <section
-        className={`cs-ai-float-panel ${chatExpanded ? "is-expanded" : "is-collapsed"}`}
+        className={`cs-ai-float-panel ${chatExpanded && !chatClosing ? "is-expanded" : "is-collapsed"} ${chatClosing ? "is-closing" : ""}`}
         aria-hidden={!chatExpanded}
         inert={!chatExpanded}
         aria-modal={chatExpanded ? "true" : undefined}
@@ -3180,26 +3221,34 @@ function AI() {
         </div>
       </section>
       <style>{`
-        .cs-ai-float-shell{position:fixed;right:22px;bottom:94px;z-index:9990;font-family:Inter,system-ui,sans-serif;pointer-events:none}
-        .cs-ai-float-shell>.cs-ai-float-launcher{pointer-events:auto}
+        .cs-ai-float-shell{position:fixed;left:50%;top:50%;right:auto;bottom:auto;z-index:9990;font-family:Inter,system-ui,sans-serif;pointer-events:none}
+        .cs-ai-float-shell>.cs-ai-float-launcher{display:none!important;pointer-events:none!important}
         .cs-ai-float-shell>.cs-ai-float-panel{pointer-events:auto}
         .cs-ai-float-launcher{position:relative;display:grid;place-items:center;width:62px;height:62px;padding:0;border:3px solid white;border-radius:50%;background:#176b45;box-shadow:0 7px 26px #102c1c40;cursor:pointer;animation:cs-float-bob 3s ease-in-out infinite}
         .cs-ai-float-launcher .cs-ai-profile-picture,.cs-ai-float-launcher .cs-ai-profile-picture svg{display:block;width:100%;height:100%}
         .cs-ai-float-online{position:absolute;right:0;bottom:1px;width:14px;height:14px;border:2px solid white;border-radius:50%;background:#31c777}
-        .cs-ai-float-panel{position:fixed;right:22px;bottom:94px;width:min(850px,calc(100vw - 32px));height:min(720px,calc(100dvh - 125px));border:1px solid #dce7df;border-radius:18px;background:#f7f9f7;box-shadow:0 20px 70px #102c1c40;overflow:hidden;transform-origin:bottom right;opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(0,18px,0) scale(.96);transition:opacity .28s ease,transform .38s cubic-bezier(.2,.8,.2,1),visibility 0s linear .38s;will-change:opacity,transform}
-        .cs-ai-float-panel.is-collapsed{opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(0,18px,0) scale(.96)}
-        .cs-ai-float-panel.is-expanded{opacity:1;visibility:visible;pointer-events:auto;transform:translate3d(0,0,0) scale(1);transition:opacity .28s ease,transform .38s cubic-bezier(.2,.8,.2,1),visibility 0s linear 0s}
+        .cs-ai-float-panel{position:fixed;left:50%;top:50%;right:auto;bottom:auto;width:min(820px,calc(100vw - 48px));height:min(620px,calc(100dvh - 140px));border:1px solid #dce7df;border-radius:20px;background:#f7f9f7;box-shadow:0 28px 90px rgba(16,44,28,.28);overflow:hidden;transform-origin:center center;opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(-50%,calc(-50% + 24px),0) scale(.94);transition:opacity .34s ease,transform .68s cubic-bezier(.16,1,.3,1),visibility 0s linear .68s;will-change:opacity,transform}
+        .cs-ai-float-panel.is-collapsed{opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(-50%,calc(-50% + 24px),0) scale(.94)}
+        .cs-ai-float-panel.is-expanded{opacity:1;visibility:visible;pointer-events:auto;transform:translate3d(-50%,-50%,0) scale(1);transition:opacity .34s ease,transform .68s cubic-bezier(.16,1,.3,1),visibility 0s linear 0s}
         .cs-ai-float-launcher:active { transform:scale(.91)!important; }
-        .cs-ai-float-launcher .cs-ai-profile-picture { transition:transform .42s cubic-bezier(.2,.9,.25,1.25),filter .35s ease; }
-        .cs-ai-float-launcher:active .cs-ai-profile-picture { transform:scale(.88) rotate(-8deg); }
-        .cs-ai-float-windowbar{height:62px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 15px;background:#176b45;color:white}
-        .cs-ai-float-windowbrand{display:flex;align-items:center;gap:10px;min-width:0}.cs-ai-float-windowbrand .cs-ai-profile-picture{width:42px;height:42px}.cs-ai-float-windowbrand strong,.cs-ai-float-windowbrand small{display:block}.cs-ai-float-windowbrand small{margin-top:3px;font-size:11px;opacity:.82}
-        .cs-ai-float-windowcontrols{display:flex;gap:5px}.cs-ai-float-windowcontrols button{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:8px;background:#ffffff20;color:white;font-size:24px;cursor:pointer}
+        .cs-ai-float-launcher .cs-ai-profile-picture { transform:rotate(0deg); transform-origin:center; }
+        .cs-ai-float-launcher.is-chat-open .cs-ai-profile-picture { animation:cs-ai-avatar-spin-open .58s cubic-bezier(.2,.8,.2,1) both; }
+        .cs-ai-float-launcher.is-chat-closing .cs-ai-profile-picture { animation:cs-ai-avatar-spin-close .42s cubic-bezier(.4,0,.6,1) both; }
+        .cs-ai-float-launcher:active .cs-ai-profile-picture { filter:brightness(1.08); }
+        @keyframes cs-ai-avatar-spin-open { from { transform:rotate(0deg) scale(.86); } to { transform:rotate(360deg) scale(1); } }
+        @keyframes cs-ai-avatar-spin-close { from { transform:rotate(360deg) scale(1); } to { transform:rotate(0deg) scale(.86); } }
+        .cs-ai-float-panel.is-closing { opacity:0; pointer-events:none; transform:translate3d(-50%,calc(-50% + 18px),0) scale(.94) rotate(-1deg); transition:opacity .36s ease,transform .58s cubic-bezier(.4,0,.2,1),visibility 0s linear .58s; }
+        .cs-ai-float-panel.is-expanded { animation:cs-ai-chat-enter .42s cubic-bezier(.2,.8,.2,1) both; }
+        @keyframes cs-ai-chat-enter { from { opacity:0; transform:translate3d(-50%,calc(-50% + 30px),0) scale(.94) rotate(.4deg); } to { opacity:1; transform:translate3d(-50%,-50%,0) scale(1) rotate(0); } }
+        @media (prefers-reduced-motion: reduce) { .cs-ai-float-launcher.is-chat-open .cs-ai-profile-picture,.cs-ai-float-launcher.is-chat-closing .cs-ai-profile-picture,.cs-ai-float-panel.is-expanded { animation:none!important; } }
+        .cs-ai-float-windowbar{position:relative;height:66px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 58px;background:linear-gradient(110deg,#0e6541,#168252);color:white}
+        .cs-ai-float-windowbrand{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;text-align:left}.cs-ai-float-windowbrand .cs-ai-profile-picture{width:44px;height:44px;flex:0 0 44px}.cs-ai-float-windowbrand strong,.cs-ai-float-windowbrand small{display:block}.cs-ai-float-windowbrand strong{font-size:14px;letter-spacing:.1px}.cs-ai-float-windowbrand small{margin-top:3px;font-size:11px;opacity:.86}
+        .cs-ai-float-windowcontrols{position:absolute;right:12px;top:50%;display:flex;gap:5px;transform:translateY(-50%)}.cs-ai-float-windowcontrols button{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:9px;background:#ffffff20;color:white;font-size:24px;cursor:pointer;transition:background .2s ease,transform .2s ease}.cs-ai-float-windowcontrols button:hover{background:#ffffff32;transform:translateY(-1px)}
         .cs-ai-float-content{height:calc(100% - 62px);min-height:0}.cs-ai-float-panel .cs-ai{display:flex!important;flex-direction:row!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;overflow:hidden!important}
         .cs-ai-float-panel .cs-hero-banner,.cs-ai-float-panel .cs-ai-toolbar,.cs-ai-float-panel .cs-insights-column{display:none!important}.cs-ai-float-panel .cs-main{display:flex!important;flex:1 1 auto!important;flex-direction:column!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-workspace{display:flex!important;flex:1 1 auto!important;min-height:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-chat-column{display:flex!important;flex:1 1 auto!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}.cs-ai-float-panel .cs-chat-scroll{flex:1 1 auto!important;min-height:0!important;height:auto!important;padding:16px!important;overflow-y:auto!important}.cs-ai-float-panel .cs-composer-area{flex:0 0 auto!important}.cs-ai-float-panel .cs-suggestions{grid-template-columns:1fr!important}
         /* Desktop chat history: reserve a permanent column beside the conversation. */
         @media (min-width: 651px) {
-          .cs-ai-float-panel { width: min(1040px, calc(100vw - 40px)) !important; }
+          .cs-ai-float-panel { width: min(820px, calc(100vw - 48px)) !important; height:min(620px,calc(100dvh - 140px)) !important; }
           .cs-ai-float-content { display: block !important; }
           .cs-ai-float-panel .cs-ai { display: flex !important; flex-direction: row !important; align-items: stretch !important; }
           .cs-ai-float-panel .cs-ai > .cs-float-history,
@@ -3231,7 +3280,10 @@ function AI() {
           .cs-ai-float-shell{right:14px;bottom:84px}
           .cs-ai-float-launcher{width:56px;height:56px}
           /* Mobile chat uses the full available screen instead of a clipped card. */
-          .cs-ai-float-panel{position:fixed!important;inset:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;border:0!important;transform-origin:center!important}
+          .cs-ai-float-panel{position:fixed!important;inset:0!important;left:0!important;top:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;border:0!important;transform-origin:center!important}
+          .cs-ai-float-panel.is-expanded,.cs-ai-float-panel.is-collapsed,.cs-ai-float-panel.is-closing{transform:none!important}
+          .cs-ai-float-panel.is-expanded{animation:cs-ai-mobile-chat-enter .34s ease both}
+          @keyframes cs-ai-mobile-chat-enter{from{opacity:0}to{opacity:1}}
           .cs-ai-float-content{height:calc(100% - 62px)!important;width:100%!important;min-width:0!important;overflow:hidden!important}
           .cs-ai-float-panel .cs-ai{width:100%!important;max-width:100%!important;min-width:0!important;height:100%!important;min-height:0!important;overflow:hidden!important}
           .cs-ai-float-panel .cs-main{width:100%!important;min-width:0!important;max-width:100%!important;flex:1 1 0!important}
@@ -3414,22 +3466,64 @@ function AI() {
           opacity:0 !important;
           visibility:hidden !important;
           pointer-events:none !important;
-          transform:translate3d(0,18px,0) scale(.96) !important;
+          transform:translate3d(-50%,-46%,0) scale(.96) !important;
           transition:opacity .30s ease,
             transform .42s cubic-bezier(.2,.8,.2,1),
             visibility 0s linear .42s !important;
         }
+        /* Desktop conversation opens in a centered, compact workspace while the nav avatar rockets upward. */
+        .cs-ai-float-panel {
+          top:50%!important; left:50%!important; right:auto!important; bottom:auto!important; inset:auto!important;
+          width:min(900px,calc(100vw - 72px))!important;
+          height:min(650px,calc(100dvh - 112px))!important; max-height:calc(100dvh - 80px)!important;
+          border-radius:22px!important; border-width:1px!important;
+          transform-origin:center center!important;
+          transform:translate3d(-50%,-46%,0) scale(.96)!important;
+          transition:top .46s cubic-bezier(.2,.8,.2,1),left .46s cubic-bezier(.2,.8,.2,1),width .46s cubic-bezier(.2,.8,.2,1),height .46s cubic-bezier(.2,.8,.2,1),border-radius .34s ease,opacity .26s ease,transform .46s cubic-bezier(.2,.8,.2,1),visibility 0s linear .46s!important;
+        }
+        .cs-ai-float-panel.is-expanded {
+          top:50%!important; left:50%!important; right:auto!important; bottom:auto!important; inset:auto!important;
+          width:min(900px,calc(100vw - 72px))!important; height:min(650px,calc(100dvh - 112px))!important;
+          max-height:calc(100dvh - 80px)!important; border-radius:22px!important; border-width:1px!important;
+          transform:translate3d(-50%,-50%,0) scale(1)!important;
+          transition:top .46s cubic-bezier(.2,.8,.2,1),left .46s cubic-bezier(.2,.8,.2,1),width .46s cubic-bezier(.2,.8,.2,1),height .46s cubic-bezier(.2,.8,.2,1),border-radius .34s ease,opacity .26s ease,transform .46s cubic-bezier(.2,.8,.2,1),visibility 0s linear 0s!important;
+        }
+        .cs-ai-float-panel.is-closing {
+          top:50%!important; left:50%!important; right:auto!important; bottom:auto!important; inset:auto!important;
+          width:min(900px,calc(100vw - 72px))!important; height:min(650px,calc(100dvh - 112px))!important;
+          max-height:calc(100dvh - 80px)!important; border-radius:22px!important; border-width:1px!important;
+          transform:translate3d(-50%,-46%,0) scale(.96)!important;
+        }
         .cs-ai-float-windowbar { background:linear-gradient(110deg,#075c3c,#138653 58%,#20a66a)!important; }
+        /* Keep the header logo and both title lines left of the centered rocket avatar. */
+        .cs-ai-float-windowbar .cs-ai-float-windowbrand {
+          position:absolute!important; left:28px!important; right:150px!important; top:50%!important;
+          transform:translateY(-50%)!important; justify-content:flex-start!important;
+          width:max-content!important; max-width:calc(100% - 190px)!important;
+          z-index:3!important; text-align:left!important; gap:10px!important;
+        }
+        .cs-ai-float-windowbar .cs-ai-float-windowbrand > span { min-width:0!important; }
+        .cs-ai-float-windowbar .cs-ai-float-windowbrand strong,
+        .cs-ai-float-windowbar .cs-ai-float-windowbrand small { white-space:nowrap!important; }
+        @media(max-width:600px) {
+          .cs-ai-float-windowbar .cs-ai-float-windowbrand { left:12px!important; right:94px!important; max-width:calc(100% - 112px)!important; gap:7px!important; }
+          .cs-ai-float-windowbar .cs-ai-float-windowbrand .cs-ai-profile-picture { width:36px!important; height:36px!important; flex-basis:36px!important; }
+          .cs-ai-float-windowbar .cs-ai-float-windowbrand strong { font-size:12px!important; }
+          .cs-ai-float-windowbar .cs-ai-float-windowbrand small { font-size:10px!important; }
+        }
         @keyframes cs-ai-orbit-pulse { 0%{transform:scale(.94);opacity:.85} 75%,100%{transform:scale(1.2);opacity:0} }
         @keyframes cs-ai-orbit-spin { to{transform:rotate(360deg)} }
         @media(max-width:600px) {
           .cs-ai-float-shell { right:14px!important; bottom:88px!important; }
+          .cs-ai-float-panel { top:auto!important; left:10px!important; right:10px!important; bottom:82px!important; inset:auto 10px 82px 10px!important; width:auto!important; height:min(720px,calc(100dvh - 100px))!important; max-height:calc(100dvh - 90px)!important; border-radius:20px!important; transform:translate3d(0,14px,0) scale(.97)!important; }
+          .cs-ai-float-panel.is-collapsed { transform:translate3d(0,14px,0) scale(.97)!important; }
+          .cs-ai-float-panel.is-expanded { top:0!important; left:0!important; right:0!important; bottom:0!important; inset:0!important; width:100vw!important; height:100dvh!important; max-height:100dvh!important; border-radius:0!important; transform:translate3d(0,0,0) scale(1)!important; }
+          .cs-ai-float-panel.is-closing { top:auto!important; left:10px!important; right:10px!important; bottom:82px!important; inset:auto 10px 82px 10px!important; width:auto!important; height:min(720px,calc(100dvh - 100px))!important; border-radius:20px!important; transform:translate3d(0,14px,0) scale(.97)!important; }
           .cs-ai-float-launcher { width:62px!important;height:62px!important; }
           .cs-ai-float-launcher .cs-ai-profile-picture { width:50px!important;height:50px!important; }
           .cs-ai-launcher-label { max-width:calc(100vw - 90px); padding:10px 34px 10px 12px; }
           .cs-ai-launcher-label strong { font-size:12px; }
           .cs-ai-launcher-label i { font-size:9px; }
-          .cs-ai-float-panel { right:10px!important;bottom:82px!important;width:calc(100vw - 20px)!important;height:min(720px,calc(100dvh - 100px))!important;border-radius:20px!important; }
         }
         @media(prefers-reduced-motion:reduce) {
           .cs-ai-float-panel,.cs-ai-float-panel *, .cs-ai-float-launcher,.cs-ai-launcher-label,.cs-ai-launcher-orbit { animation:none!important;transition:none!important; }
@@ -3527,6 +3621,19 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   const [activeSection, setActiveSection] = useState("dashboard");
+  const [aiNavMotion, setAiNavMotion] = useState("closed");
+
+  useEffect(() => {
+    const handleAIState = (event) => {
+      const state = event?.detail || {};
+      if (state.closing) setAiNavMotion("returning");
+      else if (state.launching || state.open) setAiNavMotion("open");
+      else setAiNavMotion("closed");
+    };
+
+    window.addEventListener("clothstock:ai-state", handleAIState);
+    return () => window.removeEventListener("clothstock:ai-state", handleAIState);
+  }, []);
 
 const [sidebarOpen, setSidebarOpen] = useState(
   () => window.innerWidth > 900
@@ -3537,8 +3644,44 @@ const [sidebarOpen, setSidebarOpen] = useState(
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const requestIdRef = useRef(0);
+
+  const handleLogoutRequest = () => {
+    if (isLoggingOut) return;
+    setShowLogoutConfirm(true);
+  };
+
+  const logoutTimerRef = useRef(null);
+
+  const confirmLogout = () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    logoutTimerRef.current = window.setTimeout(() => {
+      logoutTimerRef.current = null;
+      logout();
+      setShowLogoutConfirm(false);
+      setIsLoggingOut(false);
+    }, 1100);
+  };
+
+  // Reset the dialog whenever authentication changes. This prevents the
+  // previous account's loading state from surviving into the next login.
+  useEffect(() => {
+    if (logoutTimerRef.current) {
+      window.clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+    setShowLogoutConfirm(false);
+    setIsLoggingOut(false);
+  }, [token, user?._id, user?.id]);
+
+  useEffect(() => () => {
+    if (logoutTimerRef.current) window.clearTimeout(logoutTimerRef.current);
+  }, []);
+
   const refreshTimerRef = useRef(null);
   const hasLoadedRef = useRef(false);
 
@@ -3796,7 +3939,49 @@ const [sidebarOpen, setSidebarOpen] = useState(
     .app .sidebar .staff-bottom-logout .cs-nav-icon { color:#b34a4a; background:#fff0ef; }
     .app .sidebar .staff-bottom-logout:hover { color:#a42d2d; background:#fff5f4; }
     .app .sidebar .staff-bottom-logout:hover .cs-nav-icon { color:white; background:linear-gradient(145deg,#f07770,#bd3c37); }
-    @media (prefers-reduced-motion:reduce) { .app .sidebar .nav-link,.app .sidebar .nav-link .cs-nav-icon { transition:none; } }
+    /* Original ClothStock full-width green bottom bar, with AI centered between Products and Sales. */
+    .cs-bottom-nav { position:fixed; z-index:10000; left:0; right:0; bottom:0; transform:none; width:100%; min-height:110px; box-sizing:border-box; display:flex; align-items:center; justify-content:space-evenly; gap:clamp(5px,2vw,24px); padding:10px clamp(10px,2vw,32px) max(9px,env(safe-area-inset-bottom)); border:0; border-top:1px solid rgba(220,245,231,.42); border-radius:0; background:linear-gradient(110deg,#397d69 0%,#2d705d 48%,#23644f 100%); box-shadow:0 -8px 28px rgba(11,62,43,.13),inset 0 1px rgba(255,255,255,.12); backdrop-filter:blur(16px); }
+    /* Keep the original green navigation design and all navigation items unchanged while AI is open. */
+    .cs-ai-float-panel.is-expanded { top:72px!important; bottom:0!important; inset:72px auto 0 50%!important; width:min(900px,calc(100vw - 72px))!important; height:calc(100dvh - 72px)!important; max-height:calc(100dvh - 72px)!important; transform:translate3d(-50%,0,0) scale(1)!important; border-radius:22px 22px 0 0!important; z-index:9990!important; }
+    .cs-ai-float-panel.is-expanded .cs-ai-float-content { min-height:0!important; }
+    @media(max-width:760px) {
+      .cs-ai-float-panel.is-expanded { top:0!important; bottom:0!important; inset:0!important; width:100vw!important; height:100dvh!important; max-height:100dvh!important; border-radius:0!important; transform:translate3d(0,0,0) scale(1)!important; }
+    }
+    .cs-bottom-nav-item { position:relative; display:flex; flex:1 1 0; min-width:0; max-width:none; min-height:88px; align-items:center; justify-content:center; flex-direction:column; gap:7px; border:1px solid transparent; border-radius:22px; padding:7px 9px; background:transparent; color:#f5fff8; font:inherit; cursor:pointer; transition:color .24s ease,background .24s ease,border-color .24s ease,transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .24s ease; }
+    .cs-bottom-nav-item:hover { color:#fff; background:rgba(255,255,255,.09); transform:translateY(-2px); }
+    .cs-bottom-nav-item:focus-visible { outline:3px solid rgba(220,255,233,.75); outline-offset:2px; }
+    .cs-bottom-nav-item > svg { box-sizing:content-box; width:25px; height:25px; padding:10px; border-radius:15px; color:#07834f; background:linear-gradient(145deg,#f2fbf5,#dcefe4); box-shadow:0 3px 10px rgba(5,65,40,.12),inset 0 1px rgba(255,255,255,.9); transition:transform .24s ease,box-shadow .24s ease; }
+    .cs-bottom-nav-item > span:last-child { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; line-height:1.2; font-weight:750; color:#f5fff8; }
+    .cs-bottom-nav-item.is-active { color:#fff; background:rgba(238,255,245,.12); border-color:rgba(236,255,244,.48); box-shadow:inset 0 1px rgba(255,255,255,.12); }
+    .cs-bottom-nav-item.is-active > svg { color:#fff; background:linear-gradient(145deg,#20b879 0%,#07804f 100%); box-shadow:0 5px 14px rgba(5,65,40,.24),inset 0 1px rgba(255,255,255,.2); transform:translateY(-1px); }
+    .cs-bottom-nav-item.cs-bottom-nav-logout > svg { color:#07834f; }
+    .cs-bottom-nav-item.cs-bottom-nav-logout:hover > svg { color:#fff; background:linear-gradient(145deg,#20b879 0%,#07804f 100%); }
+    .cs-bottom-nav-item.cs-bottom-nav-logout:disabled { opacity:.65; cursor:not-allowed; transform:none; }
+    .cs-bottom-nav-item.is-ai { flex:1 1 0; max-width:none; min-height:98px; margin-top:-20px; color:#fff; font-weight:800; z-index:2; transform-origin:center bottom; }
+    .cs-bottom-nav-item.is-ai .cs-bottom-ai-avatar { display:grid; place-items:center; width:64px; height:64px; box-sizing:border-box; border:4px solid #f4fff8; border-radius:50%; background:radial-gradient(circle at 30% 22%,#4cda9c 0%,#1caa70 42%,#08734a 100%); box-shadow:0 8px 20px rgba(5,58,38,.34),0 0 0 5px rgba(225,255,237,.12),inset 0 1px rgba(255,255,255,.45); transition:box-shadow .28s ease,filter .28s ease; will-change:transform; }
+    .cs-bottom-nav-item.is-ai .cs-bottom-ai-avatar .cs-ai-profile-picture { display:block; width:100%; height:100%; }
+    .cs-bottom-nav-item.is-ai .cs-bottom-ai-avatar svg { display:block; width:100%; height:100%; }
+    .cs-bottom-nav-item.is-ai > span:last-child { color:#f4fff8; font-size:12px; text-shadow:0 1px 2px rgba(5,55,35,.22); }
+    .cs-bottom-nav-item.is-ai:hover { background:rgba(255,255,255,.06); }
+    .cs-bottom-nav-item.is-ai:hover .cs-bottom-ai-avatar { filter:brightness(1.08); box-shadow:0 12px 26px rgba(5,58,38,.38),0 0 0 7px rgba(225,255,237,.16); }
+    .cs-bottom-nav-item.is-ai:active .cs-bottom-ai-avatar { filter:brightness(1.12); }
+    .cs-bottom-nav-item.is-ai.is-ai-open .cs-bottom-ai-avatar { animation:cs-bottom-ai-rocket-up 2.4s linear both; }
+    .cs-bottom-nav-item.is-ai.is-ai-returning .cs-bottom-ai-avatar { animation:cs-bottom-ai-rocket-down 2.6s linear both; }
+    /* Smooth GPU-friendly rocket path; finish lower so the robot touches the chat window's top edge. */
+    .cs-bottom-ai-avatar { backface-visibility:hidden; transform:translate3d(0,0,0); }
+    /* One uninterrupted transform per direction: no intermediate keyframes, easing segments, or mid-flight holds. */
+    @keyframes cs-bottom-ai-rocket-up {
+      from { transform:translate3d(0,0,0) rotate(0turn) scale(1); }
+      to   { transform:translate3d(0,calc(75px - 90dvh),0) rotate(1turn) scale(.96); }
+    }
+    /* Constant-rate reverse path keeps translation and rotation moving together without a pause. */
+    @keyframes cs-bottom-ai-rocket-down {
+      from { transform:translate3d(0,calc(75px - 90dvh),0) rotate(0turn) scale(.96); }
+      to   { transform:translate3d(0,0,0) rotate(1turn) scale(1); }
+    }
+    .app .main-content { padding-bottom:132px; }
+    @media(max-width:600px) { .cs-bottom-nav { min-height:86px; gap:2px; padding:6px 5px max(7px,env(safe-area-inset-bottom)); } .cs-bottom-nav-item { min-height:68px; gap:5px; padding:5px 2px; border-radius:15px; } .cs-bottom-nav-item > svg { width:21px; height:21px; padding:7px; border-radius:12px; } .cs-bottom-nav-item > span:last-child { font-size:9px; } .cs-bottom-nav-item.is-ai { flex:1 1 0; max-width:none; min-height:78px; margin-top:-17px; } .cs-bottom-nav-item.is-ai .cs-bottom-ai-avatar { width:53px; height:53px; border-width:3px; } .cs-bottom-nav-item.is-ai > span:last-child { font-size:9px; } .app .main-content { padding-bottom:105px; } }
+    @media (prefers-reduced-motion:reduce) { .app .sidebar .nav-link,.app .sidebar .nav-link .cs-nav-icon,.cs-bottom-nav-item,.cs-bottom-ai-avatar { transition:none !important; animation-duration:.01ms !important; } }
   `}</style>
   <div
     className={`app ${
@@ -3877,31 +4062,6 @@ const [sidebarOpen, setSidebarOpen] = useState(
           <span className="cs-nav-icon"><ClothStockNavIcon type="sales" /></span><span className="cs-nav-label">Sales</span>
         </button>
 
-        {!isAdmin && (
-          <button
-            type="button"
-            className="nav-link staff-bottom-logout"
-            onClick={logout}
-            aria-label="Logout"
-          >
-            <span className="cs-nav-icon"><ClothStockNavIcon type="logout" /></span>
-            <span className="cs-nav-label">Logout</span>
-          </button>
-        )}
-
-
-        {isAdmin && (
-          <button
-            type="button"
-            className={`nav-link ${
-              activeSection === "reports" ? "active" : ""
-            }`}
-            onClick={() => navigateTo("reports")}
-          >
-            <span className="cs-nav-icon"><ClothStockNavIcon type="reports" /></span><span className="cs-nav-label">Reports</span>
-          </button>
-        )}
-
         {isAdmin && (
           <button
             type="button"
@@ -3914,6 +4074,17 @@ const [sidebarOpen, setSidebarOpen] = useState(
           </button>
         )}
 
+        {!isAdmin && (
+          <button
+            type="button"
+            className="nav-link staff-bottom-logout"
+            onClick={handleLogoutRequest}
+            disabled={isLoggingOut}
+          >
+            <span className="cs-nav-icon"><ClothStockNavIcon type="logout" /></span>
+            <span className="cs-nav-label">Logout</span>
+          </button>
+        )}
 
         <div className="sidebar-footer">
           <span className="status-dot"></span>
@@ -3929,7 +4100,9 @@ const [sidebarOpen, setSidebarOpen] = useState(
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Dashboard</p>
-                <h1>Inventory Dashboard</h1>
+                <h1>
+                  WELCOME {user?.name || user?.username || "Admin"}
+                </h1>
                 <p className="subtitle">
                   Welcome back! Here's your clothing store overview.
                 </p>
@@ -3962,7 +4135,11 @@ const [sidebarOpen, setSidebarOpen] = useState(
             <header className="topbar">
               <div>
                 <p className="breadcrumb">Workspace / Products</p>
-                <h1>Product Management</h1>
+                <h1>
+                  {isAdmin
+                    ? "Product Management"
+                    : `WELCOME ${user?.name || user?.username || "User"}`}
+                </h1>
                 <p className="subtitle">
                   Add, edit, delete, and manage clothing products.
                 </p>
@@ -4098,7 +4275,7 @@ const [sidebarOpen, setSidebarOpen] = useState(
         )}
 
         {activeSection === "users" && isAdmin && (
-          <section className="page-section">
+          <section className="page-section user-management-shell">
             <header className="topbar">
               <div>
                 <p className="breadcrumb">
@@ -4111,9 +4288,158 @@ const [sidebarOpen, setSidebarOpen] = useState(
               </div>
             </header>
             <Users />
+            <div className="page-logout-actions user-management-logout">
+              <div>
+                <h2>Account Administration</h2>
+                <p>Sign out securely when you have finished managing accounts.</p>
+              </div>
+              <button
+                type="button"
+                className="page-logout-button"
+                onClick={handleLogoutRequest}
+                disabled={isLoggingOut}
+              >
+                <ClothStockNavIcon type="logout" />
+                Logout
+              </button>
+            </div>
           </section>
         )}
       </main>
+
+      <nav className="cs-bottom-nav" aria-label="Primary navigation">
+        {isAdmin && (
+          <button type="button" className={`cs-bottom-nav-item ${activeSection === "dashboard" ? "is-active" : ""}`} onClick={() => navigateTo("dashboard")} aria-current={activeSection === "dashboard" ? "page" : undefined}>
+            <ClothStockNavIcon type="dashboard" /><span>Dashboard</span>
+          </button>
+        )}
+        <button type="button" className={`cs-bottom-nav-item ${activeSection === "products" ? "is-active" : ""}`} onClick={() => navigateTo("products")} aria-current={activeSection === "products" ? "page" : undefined}>
+          <ClothStockNavIcon type="products" /><span>Products</span>
+        </button>
+        <button type="button" className={`cs-bottom-nav-item is-ai ${aiNavMotion === "open" ? "is-ai-open" : aiNavMotion === "returning" ? "is-ai-returning" : ""}`} onClick={() => navigateTo("ai")} aria-label={aiNavMotion === "open" ? "Close ClothStock AI chat" : "Open ClothStock AI chat"} aria-expanded={aiNavMotion === "open"}>
+          <span className="cs-bottom-ai-avatar"><ClothStockAIAvatar /></span><span>ClothStock AI</span>
+        </button>
+        <button type="button" className={`cs-bottom-nav-item ${activeSection === "sales" ? "is-active" : ""}`} onClick={() => navigateTo("sales")} aria-current={activeSection === "sales" ? "page" : undefined}>
+          <ClothStockNavIcon type="sales" /><span>Sales</span>
+        </button>
+        {!isAdmin && (
+          <button
+            type="button"
+            className="cs-bottom-nav-item cs-bottom-nav-logout"
+            onClick={handleLogoutRequest}
+            disabled={isLoggingOut}
+            aria-label="Logout"
+          >
+            <ClothStockNavIcon type="logout" /><span>Logout</span>
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" className={`cs-bottom-nav-item ${activeSection === "users" ? "is-active" : ""}`} onClick={() => navigateTo("users")} aria-current={activeSection === "users" ? "page" : undefined}>
+            <ClothStockNavIcon type="users" /><span>User Management</span>
+          </button>
+        )}
+      </nav>
+
+      {showLogoutConfirm && createPortal(
+        <div
+          className="cs-logout-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isLoggingOut) {
+              setShowLogoutConfirm(false);
+            }
+          }}
+        >
+          <section
+            className={`cs-logout-dialog ${isLoggingOut ? "is-logging-out" : ""}`}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cs-logout-title"
+            aria-describedby="cs-logout-description"
+          >
+            {!isLoggingOut ? (
+              <>
+                <div className="cs-logout-icon" aria-hidden="true">
+                  <ClothStockNavIcon type="logout" />
+                </div>
+                <p className="cs-logout-eyebrow">CLOTHSTOCK SECURITY</p>
+                <h2 id="cs-logout-title">Are you sure you want to logout?</h2>
+                <p id="cs-logout-description">You can sign back in anytime to continue managing your inventory.</p>
+                <div className="cs-logout-actions">
+                  <button type="button" className="cs-logout-cancel" onClick={() => setShowLogoutConfirm(false)}>
+                    Stay logged in
+                  </button>
+                  <button type="button" className="cs-logout-confirm" onClick={confirmLogout}>
+                    Yes, logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="cs-logout-loading" role="status" aria-live="polite">
+                <span className="cs-logout-spinner" aria-hidden="true" />
+                <h2 id="cs-logout-title">Logging out...</h2>
+                <p id="cs-logout-description">Securely ending your session</p>
+              </div>
+            )}
+          </section>
+        </div>,
+        document.body
+      )}
+
+      <style>{`
+        .user-management-shell{--um-green:#16764c;--um-dark:#173b2d;--um-muted:#718177;color:var(--um-dark)}
+        .user-management-shell .topbar{margin-bottom:24px}
+        .user-management-shell .topbar h1{font-size:clamp(28px,3vw,38px);letter-spacing:-1.1px;font-weight:850;color:var(--um-dark)}
+        .user-management-shell .subtitle{color:var(--um-muted);line-height:1.65}
+        .user-management-shell button{font:inherit;font-weight:700;border-radius:11px;transition:transform .18s ease,box-shadow .18s ease,background .18s ease,border-color .18s ease;cursor:pointer}
+        .user-management-shell button:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(19,91,57,.12)}
+        .user-management-shell button:focus-visible{outline:3px solid rgba(34,160,99,.35);outline-offset:3px}
+        .user-management-shell table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #e0eae3;border-radius:14px;background:white}
+        .user-management-shell th{background:#f0f7f2;color:#577063;font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;padding:15px 16px;border-bottom:1px solid #e0eae3}
+        .user-management-shell td{padding:15px 16px;border-bottom:1px solid #edf2ee;color:#355344;font-size:14px}
+        .user-management-shell tbody tr:last-child td{border-bottom:0}
+        .user-management-shell tbody tr{transition:background .18s ease}
+        .user-management-shell tbody tr:hover{background:#f8fcf9}
+        .user-management-shell input,.user-management-shell select{min-height:43px;border:1px solid #d7e5db;border-radius:11px;padding:10px 12px;background:#fff;color:#203f31;transition:border-color .18s ease,box-shadow .18s ease}
+        .user-management-shell input:focus,.user-management-shell select:focus{outline:none;border-color:#2c9a65;box-shadow:0 0 0 3px rgba(44,154,101,.12)}
+        .user-management-shell button:not([aria-label*="close"]){padding:10px 14px}
+        .user-management-shell button[class*="delete"],.user-management-shell button[class*="remove"]{color:#b93834;background:#fff4f2;border:1px solid #f2d5d2}
+        .user-management-shell button[class*="edit"]{color:#176b45;background:#eff8f1;border:1px solid #d5eadb}
+        .user-management-shell button[class*="add"],.user-management-shell button[type="submit"]{color:#fff;background:linear-gradient(135deg,#168451,#0e6440);border:1px solid #14764b;box-shadow:0 5px 12px rgba(17,115,69,.12)}
+        @media(max-width:700px){.user-management-shell{overflow-x:auto}.user-management-shell table{min-width:650px}.user-management-shell th,.user-management-shell td{padding:12px}}
+        .page-logout-actions{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:26px 0 18px;padding:22px 24px;border:1px solid #dce9df;border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#f3faf5 100%);box-shadow:0 8px 24px rgba(18,73,43,.06)}
+        .page-logout-actions h2{margin:0;color:#173b2d;font-size:17px;font-weight:800}
+        .page-logout-actions p{margin:6px 0 0;color:#718177;font-size:13px;line-height:1.5}
+        .page-logout-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;padding:11px 18px;border:1px solid #bd3e38;border-radius:12px;background:linear-gradient(135deg,#e9685e,#bd3c37);color:#fff;font:inherit;font-weight:750;cursor:pointer;box-shadow:0 7px 16px rgba(189,60,55,.16);transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+        .page-logout-button svg{width:19px;height:19px}
+        .page-logout-button:hover{transform:translateY(-2px);box-shadow:0 11px 22px rgba(189,60,55,.24);filter:saturate(1.08)}
+        .page-logout-button:focus-visible{outline:3px solid rgba(44,154,101,.35);outline-offset:3px}
+        .page-logout-button:disabled{opacity:.6;cursor:not-allowed;transform:none}
+        @media(max-width:520px){.page-logout-actions{align-items:stretch;flex-direction:column;padding:18px}.page-logout-button{width:100%}}
+        .cs-logout-backdrop{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:22px;background:rgba(9,31,23,.48);backdrop-filter:blur(8px);animation:csLogoutFadeIn .22s ease both}
+        .cs-logout-dialog{width:min(100%,460px);padding:34px 32px 28px;border:1px solid rgba(220,237,226,.9);border-radius:28px;background:linear-gradient(155deg,#fff 0%,#f4fbf6 100%);box-shadow:0 28px 90px rgba(5,35,23,.28);text-align:center;animation:csLogoutDialogIn .38s cubic-bezier(.2,.8,.2,1) both}
+        .cs-logout-icon{width:66px;height:66px;margin:0 auto 17px;display:grid;place-items:center;border-radius:22px;background:#fff0ee;color:#c9443e;box-shadow:inset 0 0 0 1px #ffdbd7}
+        .cs-logout-icon svg{width:30px;height:30px}
+        .cs-logout-eyebrow{margin:0 0 9px;color:#16734b;font-size:11px;font-weight:800;letter-spacing:2px}
+        .cs-logout-dialog h2{margin:0;color:#173b2d;font-size:clamp(21px,3vw,27px);line-height:1.25;font-weight:800;letter-spacing:-.7px}
+        .cs-logout-dialog p:not(.cs-logout-eyebrow){margin:12px 0 0;color:#708177;font-size:14px;line-height:1.65}
+        .cs-logout-actions{display:flex;gap:12px;margin-top:27px}
+        .cs-logout-actions button{flex:1;min-height:48px;border-radius:14px;padding:12px 16px;font:inherit;font-size:14px;font-weight:750;cursor:pointer;transition:transform .2s ease,box-shadow .2s ease,background .2s ease}
+        .cs-logout-actions button:hover{transform:translateY(-2px)}
+        .cs-logout-cancel{border:1px solid #dce8df;background:white;color:#355344}
+        .cs-logout-cancel:hover{background:#f0f8f2;box-shadow:0 7px 18px rgba(24,87,54,.08)}
+        .cs-logout-confirm{border:1px solid #bd3e38;background:linear-gradient(135deg,#e9685e,#bd3c37);color:white;box-shadow:0 8px 18px rgba(189,60,55,.2)}
+        .cs-logout-confirm:hover{box-shadow:0 12px 24px rgba(189,60,55,.3)}
+        .cs-logout-loading{padding:14px 0 10px;animation:csLogoutFadeIn .25s ease both}
+        .cs-logout-spinner{display:block;width:58px;height:58px;margin:0 auto 22px;border:4px solid #dcefe3;border-top-color:#168451;border-right-color:#40bd80;border-radius:50%;animation:csLogoutSpin .75s linear infinite;box-shadow:0 0 0 8px rgba(28,139,83,.06)}
+        .cs-logout-dialog.is-logging-out{animation:csLogoutPulse .5s ease-in-out infinite alternate}
+        @keyframes csLogoutFadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes csLogoutDialogIn{from{opacity:0;transform:translateY(18px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes csLogoutSpin{to{transform:rotate(360deg)}}
+        @keyframes csLogoutPulse{from{box-shadow:0 28px 90px rgba(5,35,23,.24)}to{box-shadow:0 30px 100px rgba(5,105,62,.24)}}
+        @media(max-width:480px){.cs-logout-dialog{padding:28px 20px 22px;border-radius:23px}.cs-logout-actions{flex-direction:column-reverse}}
+        @media(prefers-reduced-motion:reduce){.cs-logout-backdrop,.cs-logout-dialog,.cs-logout-loading,.cs-logout-spinner{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+      `}</style>
 
       {/* Mount once so the floating assistant stays available on every page. */}
       <AI />

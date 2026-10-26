@@ -496,12 +496,11 @@ export default function Dashboard({
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={90}
-                    innerRadius={48}
+                    outerRadius="58%"
+                    innerRadius="32%"
                     paddingAngle={3}
-                    label={({ name, percent }) =>
-                      `${name} ${((percent || 0) * 100).toFixed(0)}%`
-                    }
+                    label={false}
+                    labelLine={false}
                   >
                     {categoryData.map((entry, index) => (
                       <Cell
@@ -511,7 +510,12 @@ export default function Dashboard({
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend />
+                  <Legend
+                    layout="horizontal"
+                    verticalAlign="bottom"
+                    align="center"
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8, maxWidth: "100%" }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

@@ -1687,3 +1687,129 @@
   }
 }
 
+
+/* Successful login welcome animation */
+.login-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+
+  background: rgba(4, 42, 30, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  animation: loginWelcomeFadeIn 0.45s ease both;
+}
+
+.login-welcome-card {
+  width: min(100%, 620px);
+  padding: 48px 28px;
+  text-align: center;
+
+  background: #ffffff;
+  color: #123d2d;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 28px;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.22),
+    0 0 40px rgba(74, 222, 128, 0.2);
+
+  animation: loginWelcomePop 0.7s
+    cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.login-welcome-check {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 24px;
+
+  color: #ffffff;
+  background: linear-gradient(135deg, #10a66b, #006b46);
+  border-radius: 50%;
+  font-size: 36px;
+  font-weight: 800;
+
+  box-shadow: 0 0 0 9px rgba(16, 166, 107, 0.1),
+    0 0 30px rgba(16, 166, 107, 0.25);
+
+  animation: loginWelcomeCheck 2.5s 0.2s ease both;
+}
+
+.login-welcome-label {
+  margin: 0 0 12px;
+  color: #078653;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+
+.login-welcome-card h1 {
+  margin: 0 0 14px;
+  color: #123d2d;
+  font-size: clamp(25px, 5vw, 42px);
+  font-weight: 850;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.login-welcome-message {
+  margin: 0;
+  color: #6b7c74;
+  font-size: 15px;
+}
+
+@keyframes loginWelcomeFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loginWelcomePop {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loginWelcomeCheck {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-25deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .login-welcome-card {
+    padding: 36px 20px;
+    border-radius: 22px;
+  }
+
+  .login-welcome-card h1 {
+    font-size: 27px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-welcome-overlay,
+  .login-welcome-card,
+  .login-welcome-check {
+    animation: none;
+  }
+}

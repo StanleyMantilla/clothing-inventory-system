@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 
 const API_URL = "http://localhost:5000";
@@ -22,6 +22,7 @@ function notifyDashboard() {
 function Products() {
   const { token } = useAuth();
 
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState("");
@@ -29,7 +30,21 @@ function Products() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  function showSuccessToast(text) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(text);
+    toastTimer.current = setTimeout(() => setToast(""), 3200);
+  }
 
   async function loadProducts(searchTerm = "") {
     if (!token) {
@@ -167,11 +182,12 @@ function Products() {
 
       const wasEditing = Boolean(editingId);
 
-      setMessage(
-        wasEditing
-          ? "Product updated successfully!"
-          : "Product added successfully!"
-      );
+      setMessage("");
+      if (wasEditing) {
+        showSuccessToast("PRODUCT UPDATED SUCCESSFULLY!");
+      } else {
+        showSuccessToast("PRODUCT ADDED SUCCESSFULLY!");
+      }
 
       setForm(initialForm);
       setEditingId(null);
@@ -218,7 +234,8 @@ function Products() {
         setEditingId(null);
       }
 
-      setMessage("Product deleted successfully!");
+      setMessage("");
+      showSuccessToast("PRODUCT DELETED SUCCESSFULLY!");
 
       await loadProducts(search);
       notifyDashboard();
@@ -235,6 +252,13 @@ function Products() {
 
   return (
     <section className="products-page">
+      {toast && (
+        <div className="products-success-toast" role="status" aria-live="polite">
+          <span className="products-success-toast-icon" aria-hidden="true">✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
+
       <header className="products-heading">
         <div>
           <p className="products-eyebrow">

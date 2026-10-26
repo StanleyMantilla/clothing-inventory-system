@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   });
 
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [welcomeName, setWelcomeName] = useState("");
 
   // Log out
   const logout = useCallback(() => {
@@ -34,6 +35,7 @@ export function AuthProvider({ children }) {
 
     setToken("");
     setUser(null);
+    setWelcomeName("");
   }, []);
 
   // Log in
@@ -64,6 +66,7 @@ export function AuthProvider({ children }) {
       throw new Error("Login response is missing token or user.");
     }
 
+    // Save the authenticated session
     sessionStorage.setItem("clothstock_token", data.token);
     sessionStorage.setItem(
       "clothstock_user",
@@ -73,8 +76,31 @@ export function AuthProvider({ children }) {
     setToken(data.token);
     setUser(data.user);
 
+    // Get the actual logged-in user's name
+    const name =
+      data.user.name ||
+      data.user.username ||
+      data.user.fullName ||
+      data.user.email ||
+      email.split("@")[0] ||
+      "User";
+
+    // Trigger the welcome animation
+    setWelcomeName(name);
+
     return data.user;
   }, []);
+
+  // Automatically hide the welcome message after 2.2 seconds
+  useEffect(() => {
+    if (!welcomeName) return;
+
+    const timer = setTimeout(() => {
+      setWelcomeName("");
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [welcomeName]);
 
   // Verify the current login session
   const verifySession = useCallback(async () => {
@@ -136,9 +162,34 @@ export function AuthProvider({ children }) {
         login,
         logout,
         verifySession,
+        welcomeName,
       }}
     >
-      {children}
+      <>
+        {children}
+
+        {welcomeName && (
+          <div
+            className="login-welcome-overlay"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="login-welcome-card">
+              <div className="login-welcome-check">✓</div>
+
+              <p className="login-welcome-label">
+                LOGIN SUCCESSFUL
+              </p>
+
+              <h1>WELCOME, {welcomeName}!</h1>
+
+              <p className="login-welcome-message">
+                Let's make today productive.
+              </p>
+            </div>
+          </div>
+        )}
+      </>
     </AuthContext.Provider>
   );
 }

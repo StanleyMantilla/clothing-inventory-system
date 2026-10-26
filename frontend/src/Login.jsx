@@ -4,7 +4,6 @@ import { useAuth } from "./AuthContext";
 import AboutUs from "./AboutUs";
 import "./Login.css";
 
-
 function ShirtIcon({ className = "" }) {
   return (
     <svg
@@ -88,6 +87,9 @@ function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Welcome animation state
+  const [welcome, setWelcome] = useState(null);
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -95,7 +97,26 @@ function Login() {
     setSubmitting(true);
 
     try {
-      await login(email, password);
+      // Keep the existing authentication process
+      const result = await login(email, password);
+
+      // Read the name if login() returns the authenticated user
+      const authenticatedUser =
+        result?.user || result?.data?.user || result?.data || result;
+
+      const name =
+        authenticatedUser?.name ||
+        authenticatedUser?.username ||
+        authenticatedUser?.fullName ||
+        email.split("@")[0] ||
+        "User";
+
+      // Show the welcome animation after successful login
+      setWelcome(name);
+
+      // The authentication context may navigate automatically.
+      // If it does, the animation should be rendered by the
+      // component that remains mounted after login instead.
     } catch (err) {
       setError(err.message || "Unable to log in.");
     } finally {
@@ -105,20 +126,36 @@ function Login() {
 
   return (
     <main className="login-page">
+      {/* Welcome animation */}
+      {welcome && (
+        <div
+          className="login-welcome-overlay"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="login-welcome-card">
+            <div className="login-welcome-check">✓</div>
+            <p className="login-welcome-label">LOGIN SUCCESSFUL</p>
+            <h1>WELCOME, {welcome}!</h1>
+            <p className="login-welcome-message">
+              Let's make today productive.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="login-decoration login-decoration-one" />
       <div className="login-decoration login-decoration-two" />
       <div className="login-dots login-dots-top" />
       <div className="login-dots login-dots-bottom" />
 
       <section className="login-layout">
-        
-<div className="login-showcase">
-  <div className="login-about-position">
-    <AboutUs />
-  </div>
+        <div className="login-showcase">
+          <div className="login-about-position">
+            <AboutUs />
+          </div>
 
-  <div className="showcase-brand">
-
+          <div className="showcase-brand">
             <div className="showcase-logo">
               <ShirtIcon />
               <span className="logo-tag">•</span>
