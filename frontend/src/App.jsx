@@ -7,14 +7,13 @@ import Products from "./Products";
 import Users from "./Users";
 import Login from "./Login";
 import { useAuth } from "./AuthContext";
+import { API_URL } from "./api";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "./App.css";
 
-const API_URL = "http://localhost:5000";
 const REFRESH_EVENT = "clothstock:refresh-dashboard";
 
-const AI_API_URL = "http://localhost:5000";
 const LOW_STOCK_LIMIT = 5;
 
 const QUICK_QUESTIONS = [
@@ -88,6 +87,57 @@ function normalizeMessage(message, index) {
     content: String(message.content || ""),
     results: message.results || null,
   };
+}
+
+// Keep AI replies readable when the backend includes escaped Markdown tables.
+// Product rows are rendered separately in the structured Inventory Results panel.
+function cleanAIMessage(content) {
+  return String(content || "")
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      // Skip Markdown table rows, including rows escaped as \| by the backend.
+      if (trimmed.startsWith("|") || trimmed.startsWith("\\|")) return false;
+      return !/^\\?\|?\s*:?-{2,}/.test(trimmed);
+    })
+    .join("\n")
+    .replace(/\\([\\`*_{}\[\]()#+.!>~-])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeProductRows(data) {
+  const rawProducts = Array.isArray(data?.products)
+    ? data.products
+    : Array.isArray(data?.results?.products)
+      ? data.results.products
+      : Array.isArray(data?.results?.table?.rows)
+        ? data.results.table.rows
+        : [];
+
+  const columns = Array.isArray(data?.results?.table?.columns)
+    ? data.results.table.columns
+    : [];
+
+  return rawProducts.map((product) => {
+    if (!Array.isArray(product)) return product || {};
+    return Object.fromEntries(
+      product.map((value, index) => [
+        String(columns[index] || `column${index}`).toLowerCase().replace(/[^a-z0-9]/g, ""),
+        value,
+      ])
+    );
+  }).map((product) => ({
+    ...product,
+    name: product.name ?? product.productname ?? product.product ?? product.productname,
+    code: product.code ?? product.productcode ?? product.sku,
+    category: product.category,
+    size: product.size,
+    color: product.color,
+    quantity: product.quantity ?? product.stock ?? product.units,
+    costPrice: product.costPrice ?? product.costprice ?? product.cost,
+    sellingPrice: product.sellingPrice ?? product.sellingprice ?? product.price,
+  }));
 }
 
 function AI() {
@@ -248,7 +298,7 @@ function AI() {
     setHistoryError("");
 
     try {
-      const data = await requestJson(`${AI_API_URL}/api/ai/conversations`);
+      const data = await requestJson(`${API_URL}/api/ai/conversations`);
       setConversations(
         Array.isArray(data.conversations) ? data.conversations : []
       );
@@ -266,7 +316,7 @@ function AI() {
     }
 
     try {
-      const data = await requestJson(`${AI_API_URL}/api/ai/insights`);
+      const data = await requestJson(`${API_URL}/api/ai/insights`);
 
       setInsights(data.insights || null);
     } catch (err) {
@@ -309,7 +359,7 @@ function AI() {
 
     try {
       const data = await requestJson(
-        `${AI_API_URL}/api/ai/conversations/${id}`
+        `${API_URL}/api/ai/conversations/${id}`
       );
 
       const conversation = data.conversation;
@@ -337,12 +387,8 @@ function AI() {
         .find((message) => message.role === "assistant" && message.results);
 
       if (latestAssistant?.results) {
-        setAnswer(latestAssistant.content);
-        setProducts(
-          Array.isArray(latestAssistant.results.products)
-            ? latestAssistant.results.products
-            : []
-        );
+        setAnswer(cleanAIMessage(latestAssistant.content));
+        setProducts(normalizeProductRows({ results: latestAssistant.results }));
         setInsights(latestAssistant.results.insights || null);
       } else {
         // The live overview can still be shown even if older messages
@@ -361,7 +407,7 @@ function AI() {
     setHistoryError("");
 
     try {
-      await requestJson(`${AI_API_URL}/api/ai/conversations/${id}`, {
+      await requestJson(`${API_URL}/api/ai/conversations/${id}`, {
         method: "DELETE",
       });
 
@@ -411,7 +457,7 @@ function AI() {
     setChatMessages((previous) => [...previous, userMessage]);
 
     try {
-      const data = await requestJson(`${AI_API_URL}/api/ai/chat`, {
+      const data = await requestJson(`${API_URL}/api/ai/chat`, {
         method: "POST",
         body: JSON.stringify({
           question: cleanQuestion,
@@ -427,11 +473,9 @@ function AI() {
         await new Promise((resolve) => setTimeout(resolve, typingRemaining));
       }
 
-      const responseText = data.answer || "No response was returned.";
-      const responseProducts = Array.isArray(data.products)
-        ? data.products
-        : [];
-      const responseInsights = data.insights || null;
+      const responseText = cleanAIMessage(data.answer || "No response was returned.");
+      const responseProducts = normalizeProductRows(data);
+      const responseInsights = data.insights || data.results?.insights || null;
 
       setAnswer(responseText);
       setProducts(responseProducts);
@@ -451,7 +495,8 @@ function AI() {
           results: {
             products: responseProducts,
             insights: responseInsights,
-            intent: data.intent || null,
+            table: data.results?.table || null,
+            intent: data.intent || data.results?.intent || null,
           },
         },
       ]);
@@ -792,7 +837,7 @@ function AI() {
     setReportMessage("");
 
     try {
-      const data = await requestJson(`${AI_API_URL}/api/ai/report`, {
+      const data = await requestJson(`${API_URL}/api/ai/report`, {
         method: "POST",
         body: JSON.stringify({ reportType }),
       });
@@ -1143,7 +1188,7 @@ function AI() {
                         <span className="cs-message-role">
                           {message.role === "user" ? "You" : "ClothStock AI"}
                         </span>
-                        <p>{message.content}</p>
+                        <p>{message.role === "assistant" ? cleanAIMessage(message.content) : message.content}</p>
                       </div>
                     </div>
                   ))}
@@ -1444,7 +1489,7 @@ function AI() {
         .cs-mini-stats span,.cs-overview-stat span {color:var(--cs-muted);font-size:10px}
         .cs-mini-stats strong {font-size:21px}
         .cs-table-wrap {overflow-x:auto;width:100%}
-        .cs-table {width:100%;border-collapse:collapse;text-align:left;font-size:11px}
+        .cs-table {width:100%;min-width:780px;border-collapse:collapse;text-align:left;font-size:11px}
         .cs-table th,.cs-table td {padding:10px 9px;border-bottom:1px solid #edf1ee;white-space:nowrap}
         .cs-table th {background:#f5f8f5;color:#627268;font-size:10px}
         .cs-stock {display:inline-block;padding:4px 7px;border-radius:5px;font-size:10px;font-weight:800}
@@ -3564,12 +3609,14 @@ function ProductTable({ products }) {
       <table className="cs-table">
         <thead>
           <tr>
-            <th>Product</th>
+            <th>Product Name</th>
             <th>Code</th>
             <th>Category</th>
             <th>Size</th>
             <th>Color</th>
-            <th>Stock</th>
+            <th>Quantity</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
           </tr>
         </thead>
         <tbody>
@@ -3592,6 +3639,8 @@ function ProductTable({ products }) {
                 <td>
                   <span className={`cs-stock ${stockClass}`}>{quantity}</span>
                 </td>
+                <td>{product.costPrice == null ? "—" : formatMoney(product.costPrice)}</td>
+                <td>{product.sellingPrice == null ? "—" : formatMoney(product.sellingPrice)}</td>
               </tr>
             );
           })}

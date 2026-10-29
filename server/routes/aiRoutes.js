@@ -1,16 +1,71 @@
 
+// const express = require("express");
+// const mongoose = require("mongoose");
+// const router = express.Router();
+
+
 const express = require("express");
 const mongoose = require("mongoose");
+const OpenAI = require("openai");
 const router = express.Router();
 
+const openrouter = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+  maxRetries: 0,
+});
+
+
+// const { authenticateToken } = require("./auth");
+// const {
+//   Product,
+//   Sale,
+//   Conversation,
+// } = require("../models/aiModels");
+
 const { authenticateToken } = require("./auth");
+
+const aiModels = require("../models/aiModels");
+
 const {
   Product,
   Sale,
   Conversation,
-} = require("../models/aiModels");
+} = aiModels;
+
+// AI Memory model
+const PersonKnowledge =
+  aiModels.PersonKnowledge ||
+  mongoose.models.PersonKnowledge ||
+  mongoose.model(
+    "PersonKnowledge",
+    new mongoose.Schema(
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        normalizedName: {
+          type: String,
+          required: true,
+          unique: true,
+        },
+        description: {
+          type: String,
+          required: true,
+        },
+        aliases: {
+          type: [String],
+          default: [],
+        },
+      },
+      { timestamps: true }
+    )
+  );
 
 router.use(authenticateToken);
+
 
 /* ==========================================
    CLOTHSTOCK AI MEMORY — MANAGE PEOPLE
@@ -459,6 +514,60 @@ function classify(question) {
     return "inventory-value";
   }
 
+
+  
+  // Specific product stock questions
+  // Example: How many SVUP-Jersey are in stock?
+  // Example: What is the stock of SVUP-002?
+
+  
+  // Specific product stock questions
+  // Example: How many SVUP-Jersey are in stock?
+  // Example: What is the stock of SVUP-002?
+
+  const asksStock =
+    /\b(stock|stocks|quantity|available|on hand|remaining|left|units|pieces|pcs)\b/i.test(q);
+
+  const asksSpecificQuantity =
+    /\b(how many|how much|what is|whats|what's|tell me|check|show me|give me|quantity of|stock of|available quantity of)\b/i.test(q);
+
+  const asksGeneralInventory =
+    /\b(inventory summary|inventory overview|inventory report|stock overview|overall inventory|total stock|total inventory)\b/i.test(q);
+
+  if (
+    asksStock &&
+    asksSpecificQuantity &&
+    !asksGeneralInventory
+  ) {
+    return "product-stock";
+  }
+
+  // Direct stock question, but avoid broad inventory questions.
+  if (
+    /\b(stock|quantity|available|on hand|remaining|left)\b/i.test(q) &&
+    !asksGeneralInventory &&
+    !/\b(products?|items?)\s+(in total|overall)\b/i.test(q)
+  ) {
+    return "product-stock";
+  }
+
+
+  if (
+    /\b(how many|how much|what is|whats|what's|tell me|check|show me|give me|quantity of|stock of|available quantity of)\b/i.test(q) &&
+    /\b(stock|stocks|in stock|quantity|quantities|available|on hand|remaining|left|units|pieces|pcs)\b/i.test(q)
+  ) {
+    return "product-stock";
+  }
+
+  // Direct product stock questions
+  if (
+    /\b(stock|quantity|available|on hand|remaining|left)\b/i.test(q) &&
+    !/\b(inventory summary|inventory overview|inventory report|stock overview|overall inventory)\b/i.test(q)
+  ) {
+    return "product-stock";
+  }
+
+
   if (
     /\b(how many|number of|count of|count|total number)\b/.test(q) &&
     /\b(products?|items?|product records?)\b/.test(q)
@@ -466,15 +575,25 @@ function classify(question) {
     return "product-count";
   }
 
-  if (
-    /\b(show|list|display|view|find|search|all|every|which|what are|give me)\b/.test(q) &&
-    /\b(products?|items?)\b/.test(q) &&
-    !/\b(sold|sales|selling|seller|revenue|profit)\b/.test(q)
-  ) {
-    return /\b(table|tabular|spreadsheet)\b/.test(q)
-      ? "inventory-table"
-      : "product-list";
-  }
+  
+if (
+  /\b(show|list|display|view|find|search|all|every|which|what are|give me)\b/.test(q) &&
+  /\b(products?|items?)\b/.test(q) &&
+  !/\b(sold|sales|selling|seller|revenue|profit)\b/.test(q)
+) {
+  // Always use a table when the user requests all products.
+  const asksAllProducts =
+    /\b(all|every)\s+(products?|items?)\b/.test(q) ||
+    /\b(products?|items?)\s+(all|every)\b/.test(q);
+
+  return (
+    asksAllProducts ||
+    /\b(table|tabular|spreadsheet)\b/.test(q)
+  )
+    ? "inventory-table"
+    : "product-list";
+}
+
 
   if (
     /\b(table|tabular|spreadsheet)\b/.test(q) &&
@@ -508,15 +627,40 @@ function classify(question) {
    DATABASE HELPERS
 ===================================================== */
 
+// async function getProducts() {
+//   return Product.find({})
+//     .select(
+//       "name code category size color quantity costPrice sellingPrice createdAt updatedAt"
+//     )
+//     .sort({ name: 1 })
+//     .limit(MAX_PRODUCTS)
+//     .lean();
+// }
+
+
 async function getProducts() {
-  return Product.find({})
+  const products = await Product.find({})
     .select(
       "name code category size color quantity costPrice sellingPrice createdAt updatedAt"
     )
     .sort({ name: 1 })
     .limit(MAX_PRODUCTS)
     .lean();
+
+  // Temporary diagnostic: verify the actual database values.
+  console.log(
+    "Retrieved product quantities:",
+    products.map((p) => ({
+      name: p.name,
+      code: p.code,
+      quantity: p.quantity,
+      quantityType: typeof p.quantity,
+    }))
+  );
+
+  return products;
 }
+
 
 async function getSales() {
   return Sale.find({})
@@ -777,335 +921,509 @@ router.get("/insights", async (req, res) => {
   }
 });
 
+
 /* =====================================================
    CLOTHSTOCK AI CHAT
 ===================================================== */
 
 router.post("/chat", async (req, res) => {
-  try {
-    if (!isPrivileged(req, res)) return;
+  let conversation;
 
-    const question = String(req.body?.question || "").trim();
+  try {
+    const question = String(req.body?.message || req.body?.question || "").trim();
 
     if (!question) {
       return res.status(400).json({
-        message: "Please enter a question so I can help.",
+        message: "Please enter a message.",
       });
     }
 
-    if (question.length > 1000) {
+    if (question.length > 5000) {
       return res.status(400).json({
-        message: "Please keep your question under 1,000 characters.",
+        message: "Your message is too long. Maximum is 5,000 characters.",
       });
     }
 
-    
-const person = identifyPerson(question);
+    conversation = await getConversation(
+      req,
+      req.body?.conversationId
+    );
 
-const intent = person ? "personal-knowledge" : classify(question);
-const results = {};
-let answer = "";
+    const person = identifyPerson(question);
 
-if (person) {
-  answer = `Here's what I know about ${person.name}:
+    const previousProduct = [...(conversation.messages || [])]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === "assistant" &&
+          message.results?.products?.length
+      )?.results?.products?.[0];
 
-${person.description}
+    const isFollowUp =
+      /\b(what about|how about|is that|are those|does it|do they|its stock|their stock|that enough|enough stock|tell me more|and that|and this)\b/i.test(question) ||
+      /^(and|also)\s+/i.test(question.trim());
 
-Want to ask about someone else?`;
-}
+    const intent = person
+      ? "personal-knowledge"
+      : isFollowUp && previousProduct
+        ? "product-stock"
+        : classify(question);
 
+    const results = {};
+    let answer = "";
 
-    if (intent === "greeting") {
+    // 1. PERSONAL KNOWLEDGE
+    if (person) {
+      answer = `${person.name}: ${person.description}`;
+      results.person = person;
+    }
+
+    // 2. GREETING
+    else if (intent === "greeting") {
       answer =
-        "Hello! 👋 Welcome to ClothStock AI. I'm here to help you understand your inventory, check stock levels, discover your best-selling products, and analyze your sales. What would you like to explore today?";
+        "Hello! I'm ClothStock AI. I can help you check inventory, product stock, sales, profits, and inventory reports.";
+    }
 
-    } else if (intent === "thanks") {
+    // 3. THANKS
+    else if (intent === "thanks") {
+      answer = "You're welcome! I'm here to help with ClothStock.";
+    }
+
+    // 4. HELP
+    else if (intent === "help") {
       answer =
-        "You're very welcome! 😊 I'm happy to help with your ClothStock inventory. Would you like to explore your sales performance or check which products need restocking?";
+        "I can help you with:\n" +
+        "- Inventory summary\n" +
+        "- Product stock and quantities\n" +
+        "- Low-stock and out-of-stock products\n" +
+        "- Product lists\n" +
+        "- Sales summary\n" +
+        "- Best-selling products\n" +
+        "- Gross profit estimates\n\n" +
+        "Try asking: How many products are in stock?";
+    }
 
-    } else if (person) {
-  // Personal knowledge response is already prepared above.
-}    else if (intent === "help") {
-      answer =
-        "Of course! 😊 I can analyze the records in your ClothStock database. Try asking me:\n\n" +
-        "• Which product has the highest sales?\n" +
-        "• Which products sell the most units?\n" +
-        "• What is my total sales revenue?\n" +
-        "• Which products are running low?\n" +
-        "• What is my inventory worth?\n" +
-        "• What is my estimated gross profit?\n\n" +
-        "I'll calculate the available figures from your saved records and explain the results.";
-
-    } else {
-      const needsProducts = [
+    // Inventory and product questions require staff/admin.
+    else if (
+      [
+        "product-stock",
         "product-count",
-        "inventory-value",
         "product-list",
         "inventory-table",
         "inventory-summary",
+        "inventory-value",
         "low-stock",
         "out-stock",
         "profit",
         "top-profit",
-      ].includes(intent);
-
-      const needsSales = [
-        "sales",
         "top-units",
         "top-revenue",
-        "top-profit",
-        "profit",
-      ].includes(intent);
+        "sales",
+      ].includes(intent)
+    ) {
+      if (!isPrivileged(req, res)) return;
 
-      const products = needsProducts ? await getProducts() : [];
-      const sales = needsSales ? await getSales() : [];
+      const products = await getProducts();
 
       const inventory = calculateInventory(products);
-      const salesSummary = calculateSales(sales);
 
-      if (intent === "product-count") {
-        results.insights = {
-          totalProducts: inventory.totalProducts,
-        };
+      results.inventory = inventory;
 
-        answer =
-          `Absolutely! 😊 You currently have ${number(inventory.totalProducts)} product records in your inventory.`;
-      }
+      // 5. PRODUCT STOCK
+      if (intent === "product-stock") {
+        let product = null;
 
-      else if (intent === "inventory-value") {
-        const asksCost =
-          /\b(cost|purchase|at cost|investment)\b/i.test(question);
+        // Follow-up question: use the previous product.
+        if (isFollowUp && previousProduct) {
+          product = products.find(
+            (p) =>
+              String(p._id) === String(previousProduct._id)
+          );
+        }
 
-        const asksSelling =
-          /\b(selling|retail|potential sales|if all sold)\b/i.test(question);
+        // Match by product code or product name.
+        if (!product) {
+          const q = question.toLowerCase();
 
-        if (asksCost && !asksSelling) {
-          results.insights = {
-            inventoryCostValue: inventory.inventoryCostValue,
-          };
+          product = products.find((p) => {
+            const code = String(p.code || "").toLowerCase();
+            return code && q.includes(code);
+          });
+        }
 
+        if (!product) {
+          const q = question.toLowerCase();
+
+          const matches = products
+            .filter((p) => {
+              const name = String(p.name || "").toLowerCase();
+              return name && q.includes(name);
+            })
+            .sort(
+              (a, b) =>
+                String(b.name).length -
+                String(a.name).length
+            );
+
+          product = matches[0] || null;
+        }
+
+        if (!product) {
           answer =
-            `Here's your inventory cost valuation. 📦 The current stock represents ${money(inventory.inventoryCostValue)} in recorded product cost. This is calculated from each product's available quantity multiplied by its recorded cost price.`;
-        } else if (asksSelling && !asksCost) {
-          results.insights = {
-            inventorySellingValue: inventory.inventorySellingValue,
-          };
-
-          answer =
-            `Here's the potential selling value of your current stock. 💰 If all available units sold at their recorded selling prices, the total would be ${money(inventory.inventorySellingValue)} before expenses, discounts, and other adjustments.`;
+            "I couldn't identify that product. Please provide its exact product name or product code.";
         } else {
-          results.insights = {
-            inventoryCostValue: inventory.inventoryCostValue,
-            inventorySellingValue: inventory.inventorySellingValue,
-          };
+          results.products = [product];
 
           answer =
-            `Here's your inventory valuation. 📊\n\n` +
-            `• Recorded stock cost: ${money(inventory.inventoryCostValue)}\n` +
-            `• Potential selling value: ${money(inventory.inventorySellingValue)}\n\n` +
-            `The potential selling value isn't profit; it represents expected sales before expenses and other adjustments.`;
+            `Product: ${product.name}\n` +
+            `Code: ${product.code || "—"}\n` +
+            `Category: ${product.category || "—"}\n` +
+            `Size: ${product.size || "—"}\n` +
+            `Color: ${product.color || "—"}\n` +
+            `Available stock: ${number(product.quantity)} units\n` +
+            `Stock status: ${
+              safeNum(product.quantity) <= 0
+                ? "Out of stock"
+                : safeNum(product.quantity) <= LOW_STOCK_LIMIT
+                  ? "Low stock"
+                  : "In stock"
+            }`;
         }
       }
 
-      else if (
-        intent === "product-list" ||
-        intent === "inventory-table"
-      ) {
-        results.products = products;
-        results.display =
-          intent === "inventory-table" ? "table" : "products";
-
-        answer = products.length
-          ? `Here you go! 😊 I found ${number(products.length)} product records in the inventory data retrieved for this report. You can review the product details below.`
-          : "I checked the retrieved inventory records, but there are no products to display.";
+      // 6. PRODUCT COUNT
+      else if (intent === "product-count") {
+        answer =
+          `There are ${number(products.length)} product records ` +
+          `and ${number(inventory.totalUnits)} total units in inventory.`;
       }
 
+      // 7. PRODUCT LIST / INVENTORY TABLE
+      
+        
+      // 7. PRODUCT LIST / INVENTORY TABLE
       else if (
-        intent === "low-stock" ||
-        intent === "out-stock"
-      ) {
-        const chosen =
-          intent === "low-stock"
-            ? products.filter(
+  intent === "product-list" ||
+  intent === "inventory-table"
+) {
+  results.products = products;
+
+  const columns = [
+    "Product Name",
+    "Code",
+    "Category",
+    "Size",
+    "Color",
+    "Quantity",
+    "Cost Price",
+    "Selling Price",
+  ];
+
+  const rows = products.map((p) => [
+    p.name || "—",
+    p.code || "—",
+    p.category || "—",
+    p.size || "—",
+    p.color || "—",
+    safeNum(p.quantity),
+    safeNum(p.costPrice),
+    safeNum(p.sellingPrice),
+  ]);
+
+  // Keep structured table data for the frontend.
+  results.table = {
+    columns,
+    rows,
+  };
+
+  // Clean values for readable Markdown.
+  const cleanCell = (value) =>
+    String(value ?? "—")
+      .replace(/\r?\n/g, " ")
+      .replace(/\|/g, "\\|")
+      .trim() || "—";
+
+  const formatPrice = (value) =>
+    money(safeNum(value));
+
+  const tableHeader =
+    "| " + columns.join(" | ") + " |";
+
+  const tableDivider =
+    "| " + columns.map(() => "---").join(" | ") + " |";
+
+  const tableRows = products.map((p) => {
+    const values = [
+      cleanCell(p.name),
+      cleanCell(p.code),
+      cleanCell(p.category),
+      cleanCell(p.size),
+      cleanCell(p.color),
+      number(safeNum(p.quantity)),
+      formatPrice(p.costPrice),
+      formatPrice(p.sellingPrice),
+    ];
+
+    return "| " + values.join(" | ") + " |";
+  });
+
+  answer =
+    `## Complete Product Inventory\n\n` +
+    `**Total products:** ${number(products.length)}  \n` +
+    `**Total units:** ${number(inventory.totalUnits)}  \n` +
+    `**Low-stock products:** ${number(inventory.lowStockCount)}  \n` +
+    `**Out-of-stock products:** ${number(inventory.outOfStockCount)}\n\n` +
+    (
+      products.length > 0
+        ? [
+            tableHeader,
+            tableDivider,
+            ...tableRows,
+          ].join("\n")
+        : "No products found."
+    );
+}
+
+
+
+      // 8. LOW STOCK
+      else if (intent === "low-stock") {
+        const lowStockProducts = products.filter(
+          (p) =>
+            safeNum(p.quantity) > 0 &&
+            safeNum(p.quantity) <= LOW_STOCK_LIMIT
+        );
+
+        results.products = lowStockProducts;
+
+        answer = lowStockProducts.length
+          ? `Found ${lowStockProducts.length} low-stock products:\n` +
+            lowStockProducts
+              .map(
                 (p) =>
-                  safeNum(p.quantity) > 0 &&
-                  safeNum(p.quantity) <= LOW_STOCK_LIMIT
+                  `- ${p.name} (${p.code || "—"}): ${number(p.quantity)} units`
               )
-            : products.filter(
-                (p) => safeNum(p.quantity) <= 0
-              );
-
-        results.products = chosen;
-        results.display = "products";
-
-        answer = chosen.length
-          ? intent === "low-stock"
-            ? `I found ${number(chosen.length)} product(s) that may need your attention. ⚠️ These items have between 1 and ${LOW_STOCK_LIMIT} units remaining. Consider reviewing the product cards below and planning your next restock.`
-            : `Good news: I've identified ${number(chosen.length)} product(s) with no available stock. These items may need replenishment before you can fulfill new orders.`
-          : intent === "low-stock"
-            ? `Good news! 🎉 I couldn't find any products within the low-stock range of 1–${LOW_STOCK_LIMIT} units in the retrieved inventory records.`
-            : "Great news! 🎉 No out-of-stock products were found in the retrieved inventory records.";
+              .join("\n")
+          : "There are no low-stock products right now.";
       }
 
+      // 9. OUT OF STOCK
+      else if (intent === "out-stock") {
+        const outOfStockProducts = products.filter(
+          (p) => safeNum(p.quantity) <= 0
+        );
+
+        results.products = outOfStockProducts;
+
+        answer = outOfStockProducts.length
+          ? `Found ${outOfStockProducts.length} out-of-stock products:\n` +
+            outOfStockProducts
+              .map(
+                (p) =>
+                  `- ${p.name} (${p.code || "—"})`
+              )
+              .join("\n")
+          : "Great! There are no out-of-stock products.";
+      }
+
+      // 10. INVENTORY VALUE
+      else if (intent === "inventory-value") {
+        answer =
+          `Inventory cost value: ${money(inventory.inventoryCostValue)}\n` +
+          `Potential selling value: ${money(inventory.inventorySellingValue)}\n` +
+          `Estimated potential gross profit: ${money(
+            inventory.inventorySellingValue -
+              inventory.inventoryCostValue
+          )}`;
+
+        results.inventoryValue = {
+          costValue: inventory.inventoryCostValue,
+          sellingValue: inventory.inventorySellingValue,
+          estimatedGrossProfit:
+            inventory.inventorySellingValue -
+            inventory.inventoryCostValue,
+        };
+      }
+
+      // 11. INVENTORY SUMMARY
       else if (intent === "inventory-summary") {
-        results.insights = inventory;
-
         answer =
-          `Here's your inventory snapshot! 📊\n\n` +
-          `• Products: ${number(inventory.totalProducts)}\n` +
-          `• Units on hand: ${number(inventory.totalUnits)}\n` +
-          `• Low-stock products: ${number(inventory.lowStockCount)}\n` +
-          `• Out-of-stock products: ${number(inventory.outOfStockCount)}\n` +
-          `• Stock cost value: ${money(inventory.inventoryCostValue)}\n` +
-          `• Potential selling value: ${money(inventory.inventorySellingValue)}\n\n` +
-          (inventory.lowStockCount > 0 || inventory.outOfStockCount > 0
-            ? "Recommendation: review the stock alerts and prioritize products that need replenishment."
-            : "Your retrieved stock records show no low-stock or out-of-stock items.");
+          `Inventory Summary\n\n` +
+          `Total products: ${number(inventory.totalProducts)}\n` +
+          `Total units: ${number(inventory.totalUnits)}\n` +
+          `Low-stock products: ${number(inventory.lowStockCount)}\n` +
+          `Out-of-stock products: ${number(inventory.outOfStockCount)}\n` +
+          `Inventory cost value: ${money(inventory.inventoryCostValue)}\n` +
+          `Potential selling value: ${money(inventory.inventorySellingValue)}`;
       }
 
-      else if (
-        intent === "top-units" ||
-        intent === "top-revenue" ||
-        intent === "top-profit"
-      ) {
-        const costById = new Map(
-          products.map((p) => [
-            String(p._id),
-            safeNum(p.costPrice),
-          ])
-        );
-
-        const ranked = salesSummary.rankedProducts.map((p) => {
-          const cost = costById.get(String(p.productId));
-
-          return {
-            ...p,
-            estimatedProfit:
-              cost === undefined
-                ? null
-                : p.revenue - p.units * cost,
-          };
-        });
-
-        if (intent === "top-units") {
-          ranked.sort((a, b) => b.units - a.units);
-        } else if (intent === "top-profit") {
-          ranked.sort(
-            (a, b) =>
-              (b.estimatedProfit ?? -Infinity) -
-              (a.estimatedProfit ?? -Infinity)
-          );
-        } else {
-          ranked.sort((a, b) => b.revenue - a.revenue);
-        }
-
-        const top = ranked.slice(0, 10);
-
-        results.table = top;
-        results.display = "top-products";
-
-        if (!top.length) {
-          answer =
-            "I'd be happy to find your leading products, but I couldn't find any recorded sales in the retrieved sales records yet. Once sales are recorded against products, I can rank them for you.";
-        } else {
-          const winner = top[0];
-
-          if (intent === "top-units") {
-            answer =
-              `I checked your recorded sales! 🏆 Your top-selling product is **${winner.name}**` +
-              `${winner.code && winner.code !== "—" ? ` (code: ${winner.code})` : ""}, ` +
-              `with ${number(winner.units)} unit(s) sold across ${number(winner.transactions)} transaction(s).\n\n` +
-              `Its recorded sales revenue is ${money(winner.revenue)}. I've ranked the leading products below by units sold.`;
-          } else if (intent === "top-profit") {
-            if (winner.estimatedProfit === null) {
-              answer =
-                `I found recorded sales for ${number(top.length)} product(s), but I couldn't reliably rank gross profit because some products no longer have a matching cost price in the retrieved inventory. I can still compare their recorded revenue and units sold.`;
-            } else {
-              answer =
-                `I analyzed your recorded sales alongside the current product cost prices. 📈 The highest estimated gross-profit product is **${winner.name}**, with an estimated gross profit of ${money(winner.estimatedProfit)}.\n\n` +
-                `This estimate uses current costs, not historical costs at the time of sale. I've listed the leading products below.`;
-            }
-          } else {
-            answer =
-              `I checked your recorded sales! 🏆 The product with the highest recorded sales revenue is **${winner.name}**` +
-              `${winner.code && winner.code !== "—" ? ` (code: ${winner.code})` : ""}.\n\n` +
-              `• Recorded revenue: ${money(winner.revenue)}\n` +
-              `• Units sold: ${number(winner.units)}\n` +
-              `• Transactions: ${number(winner.transactions)}\n\n` +
-              `I've ranked the leading products below by revenue. Note that revenue is not the same as profit.`;
-          }
-        }
-      }
-
-      else if (intent === "profit") {
-        const costById = new Map(
-          products.map((p) => [
-            String(p._id),
-            safeNum(p.costPrice),
-          ])
-        );
-
-        let estimatedProfit = 0;
-        let unknownCostSales = 0;
-
-        for (const sale of sales) {
-          const productId = String(
-            sale.productId?._id || sale.productId || ""
-          );
-
-          if (!costById.has(productId)) {
-            unknownCostSales++;
-            continue;
-          }
-
-          estimatedProfit +=
-            safeNum(sale.totalAmount) -
-            safeNum(sale.quantity) * costById.get(productId);
-        }
-
-        results.insights = {
-          estimatedGrossProfit: estimatedProfit,
-          totalRevenue: salesSummary.totalRevenue,
-          totalTransactions: salesSummary.totalTransactions,
-          unitsSold: salesSummary.totalUnitsSold,
-          uncostedTransactions: unknownCostSales,
-          note:
-            "Estimate uses current product cost prices. Historical costs and operating expenses are not included.",
-        };
-
-        answer =
-          `Here's your estimated gross-profit analysis. 📈\n\n` +
-          `• Recorded revenue: ${money(salesSummary.totalRevenue)}\n` +
-          `• Estimated gross profit: ${money(estimatedProfit)}\n` +
-          `• Retrieved transactions: ${number(salesSummary.totalTransactions)}\n` +
-          `• Units sold: ${number(salesSummary.totalUnitsSold)}\n\n` +
-          `Please note: this estimate uses current product cost prices and excludes operating expenses. ` +
-          (unknownCostSales
-            ? `${number(unknownCostSales)} transaction(s) couldn't be matched to a current product cost and were excluded from the profit calculation.`
-            : "Historical cost changes may affect the accuracy of the estimate.");
-      }
-
+      // 12. SALES / PROFIT / PRODUCT RANKINGS
       else {
-        results.insights = {
-          totalTransactions: salesSummary.totalTransactions,
-          unitsSold: salesSummary.totalUnitsSold,
-          totalRevenue: salesSummary.totalRevenue,
-        };
+        const sales = await getSales();
+        const summary = calculateSales(sales);
 
-        answer =
-          `Here's your sales overview! 💰\n\n` +
-          `• Retrieved transactions: ${number(salesSummary.totalTransactions)}\n` +
-          `• Units sold: ${number(salesSummary.totalUnitsSold)}\n` +
-          `• Recorded revenue: ${money(salesSummary.totalRevenue)}\n\n` +
-          `These figures are calculated from the latest ${number(MAX_SALES)} sales records retrieved, or fewer if your database contains fewer records.`;
+        results.salesSummary = summary;
+
+        // Exclude transactions with missing product references
+        // when calculating product-level cost estimates.
+        const validSales = sales.filter(
+          (s) =>
+            s.productId &&
+            typeof s.productId === "object"
+        );
+
+        const grossProfit = validSales.reduce(
+          (sum, sale) => {
+            const qty = safeNum(sale.quantity);
+            const revenue = safeNum(sale.totalAmount);
+            const cost = safeNum(sale.productId.costPrice);
+
+            return sum + (revenue - cost * qty);
+          },
+          0
+        );
+
+        if (
+          intent === "top-units" ||
+          intent === "top-revenue" ||
+          intent === "top-profit"
+        ) {
+          const ranking = new Map();
+
+          for (const sale of validSales) {
+            const product = sale.productId;
+            const id = String(product._id);
+
+            const item = ranking.get(id) || {
+              productId: id,
+              name: product.name || "Unknown",
+              code: product.code || "—",
+              units: 0,
+              revenue: 0,
+              estimatedProfit: 0,
+            };
+
+            const qty = safeNum(sale.quantity);
+            const revenue = safeNum(sale.totalAmount);
+            const cost = safeNum(product.costPrice);
+
+            item.units += qty;
+            item.revenue += revenue;
+            item.estimatedProfit += revenue - cost * qty;
+
+            ranking.set(id, item);
+          }
+
+          const ranked = [...ranking.values()];
+
+          ranked.sort((a, b) => {
+            if (intent === "top-units") {
+              return b.units - a.units;
+            }
+
+            if (intent === "top-profit") {
+              return b.estimatedProfit - a.estimatedProfit;
+            }
+
+            return b.revenue - a.revenue;
+          });
+
+          const topProducts = ranked.slice(0, 10);
+
+          results.products = topProducts;
+
+          answer = topProducts.length
+            ? "Top products:\n" +
+              topProducts
+                .map((p, index) => {
+                  let metric;
+
+                  if (intent === "top-units") {
+                    metric = `${number(p.units)} units sold`;
+                  } else if (intent === "top-profit") {
+                    metric = `${money(p.estimatedProfit)} estimated profit`;
+                  } else {
+                    metric = `${money(p.revenue)} revenue`;
+                  }
+
+                  return `${index + 1}. ${p.name} (${p.code}) — ${metric}`;
+                })
+                .join("\n")
+            : "There is no product sales data available yet.";
+        }
+
+        // PROFIT
+        else if (intent === "profit") {
+          answer =
+            `Recorded transactions: ${number(summary.totalTransactions)}\n` +
+            `Units sold: ${number(summary.totalUnitsSold)}\n` +
+            `Total sales: ${money(summary.totalRevenue)}\n` +
+            `Estimated gross profit: ${money(grossProfit)}\n\n` +
+            "Note: This is an estimate based on current product cost prices and recorded sales. Historical cost changes, discounts, refunds, and other expenses may affect actual profit.";
+
+          results.profit = {
+            estimatedGrossProfit: grossProfit,
+            totalRevenue: summary.totalRevenue,
+          };
+        }
+
+        // SALES SUMMARY
+        else {
+          answer =
+            `Sales Summary\n\n` +
+            `Total transactions: ${number(summary.totalTransactions)}\n` +
+            `Units sold: ${number(summary.totalUnitsSold)}\n` +
+            `Total sales: ${money(summary.totalRevenue)}\n` +
+            `Estimated gross profit: ${money(grossProfit)}`;
+        }
       }
     }
 
-    // Persist the actual answer and structured analysis for conversation history.
-    const conversation = await getConversation(
-      req,
-      req.body?.conversationId
-    );
+    // 13. FALLBACK AI
+    else {
+      if (!process.env.OPENROUTER_API_KEY) {
+        answer =
+          "I can help with ClothStock inventory and sales questions. Please try asking about your stock, products, or sales.";
+      } else {
+        const history = (conversation.messages || [])
+          .slice(-10)
+          .map((m) => ({
+            role: m.role,
+            content: String(m.content || "").slice(0, 4000),
+          }))
+          .filter((m) =>
+            ["user", "assistant"].includes(m.role)
+          );
+
+        const completion = await openrouter.chat.completions.create({
+          model:
+            process.env.OPENROUTER_MODEL ||
+            "openai/gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are ClothStock AI, a helpful clothing inventory assistant. Be friendly, concise, and honest. Do not invent inventory, sales, product, or user information. For live database questions, ask the user to use a supported inventory or sales query.",
+            },
+            ...history,
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+        });
+
+        answer =
+          completion.choices?.[0]?.message?.content ||
+          "I couldn't generate a response. Please try again.";
+      }
+    }
+
+    console.log("AI TABLE DEBUG:", {
+      tableColumns: results.table?.columns,
+      tableRows: results.table?.rows,
+      productCount: results.products?.length,
+    });
 
     await saveTurn(
       conversation,
@@ -1114,22 +1432,16 @@ Want to ask about someone else?`;
       results
     );
 
-    // Return only data relevant to the current request.
-    res.json({
+    return res.json({
       answer,
-      intent,
       conversationId: conversation._id,
-      ...(results.products ? { products: results.products } : {}),
-      ...(results.insights ? { insights: results.insights } : {}),
-      ...(results.table ? { table: results.table } : {}),
-      ...(results.display ? { display: results.display } : {}),
+      results,
     });
   } catch (error) {
-    console.error("ClothStock AI analysis error:", error);
+    console.error("ClothStock AI chat error:", error);
 
-    res.status(500).json({
-      message:
-        "I'm sorry, I couldn't finish analyzing your records just now. Please try again.",
+    return res.status(500).json({
+      message: "I couldn't process your message. Please try again.",
     });
   }
 });
@@ -1137,6 +1449,7 @@ Want to ask about someone else?`;
 /* =====================================================
    PDF REPORT DATA
 ===================================================== */
+
 
 router.post("/report", async (req, res) => {
   try {

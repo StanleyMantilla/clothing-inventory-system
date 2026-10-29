@@ -273,12 +273,6 @@ router.put(
         });
       }
 
-      if (id !== id.toString()) {
-        return res.status(400).json({
-          message: "Invalid user ID.",
-        });
-      }
-
       if (id === req.user.id) {
         return res.status(400).json({
           message: "You cannot change your own role.",

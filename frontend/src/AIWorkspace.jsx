@@ -1,8 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./AIWorkspace.css";
-
-const API_URL = "http://localhost:5000";
+import { API_URL } from "./api";
 
 const suggestions = [
   { icon: "▣", text: "Which products need restocking?" },

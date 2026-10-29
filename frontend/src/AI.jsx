@@ -1,9 +1,12 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useAuth } from "./AuthContext";
+import { API_URL } from "./api";
 
-const API_URL = "http://localhost:5000";
+
 const LOW_STOCK_LIMIT = 5;
 
 
@@ -238,10 +241,13 @@ function AI() {
 
       if (latestAssistant?.results) {
         setAnswer(latestAssistant.content);
+        const savedProducts = Array.isArray(latestAssistant.results.products)
+          ? latestAssistant.results.products
+          : [];
         setProducts(
-          Array.isArray(latestAssistant.results.products)
-            ? latestAssistant.results.products
-            : []
+          savedProducts.length > 0
+            ? savedProducts
+            : extractProductsFromMarkdown(latestAssistant.content || "")
         );
         setInsights(latestAssistant.results.insights || null);
       } else {
@@ -328,9 +334,13 @@ function AI() {
       }
 
       const responseText = data.answer || "No response was returned.";
-      const responseProducts = Array.isArray(data.products)
-        ? data.products
-        : [];
+      const structuredProducts = Array.isArray(data.products) ? data.products : [];
+      // Some backend responses include the inventory as a Markdown table in `answer`
+      // instead of returning `products` separately. Convert that table into the
+      // structured result panel so the full inventory is always available below stats.
+      const responseProducts = structuredProducts.length > 0
+        ? structuredProducts
+        : extractProductsFromMarkdown(responseText);
       const responseInsights = data.insights || null;
 
       setAnswer(responseText);
@@ -1034,12 +1044,24 @@ function AI() {
                       <div className={`cs-message-avatar ${message.role === "user" ? "cs-user-avatar" : "cs-assistant-avatar"}`}>
                         {message.role === "user" ? "U" : <ClothStockAIAvatar />}
                       </div>
-                      <div className="cs-message-body">
-                        <span className="cs-message-role">
-                          {message.role === "user" ? "You" : "ClothStock AI"}
-                        </span>
-                        <p>{message.content}</p>
-                      </div>
+                        
+<div className="cs-message-body">
+  <span className="cs-message-role">
+    {message.role === "user" ? "You" : "ClothStock AI"}
+  </span>
+
+  {message.role === "user" ? (
+    <p>{message.content}</p>
+  ) : (
+   
+<div className="cs-message-content">
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+    {cleanAIResponse(removeProductTableFromResponse(message.content || ""))}
+  </ReactMarkdown>
+</div>
+  )}
+</div>
+
                     </div>
                   ))}
 
@@ -1310,8 +1332,44 @@ function AI() {
         .cs-mini-stats>div,.cs-overview-stat {display:flex;flex-direction:column;gap:8px;padding:11px;border:1px solid #e7ede8;border-radius:9px;background:#fbfcfb}
         .cs-mini-stats span,.cs-overview-stat span {color:var(--cs-muted);font-size:10px}
         .cs-mini-stats strong {font-size:21px}
-        .cs-table-wrap {overflow-x:auto;width:100%}
-        .cs-table {width:100%;border-collapse:collapse;text-align:left;font-size:11px}
+        
+.cs-table-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cs-table {
+  width: max-content;
+  min-width: 850px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cs-table th,
+.cs-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cs-table th {
+  background: #eaf4ed;
+  color: #245c3a;
+  font-weight: 700;
+}
+
+.cs-table tbody tr:hover {
+  background: #f6faf7;
+}
+
+        .cs-table {width:max-content;min-width:850px;border-collapse:collapse;text-align:left;font-size:11px}
         .cs-table th,.cs-table td {padding:10px 9px;border-bottom:1px solid #edf1ee;white-space:nowrap}
         .cs-table th {background:#f5f8f5;color:#627268;font-size:10px}
         .cs-stock {display:inline-block;padding:4px 7px;border-radius:5px;font-size:10px;font-weight:800}
@@ -3328,6 +3386,72 @@ function AI() {
         @media(prefers-reduced-motion:reduce) {
           .cs-ai-float-panel,.cs-ai-float-panel *, .cs-ai-float-launcher { animation:none!important; transition:none!important; }
         }
+
+          
+.cs-message-content {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cs-message-content table {
+  /* The message pane remains fixed; wide tables scroll within the answer. */
+  max-width: 100%;
+}
+
+.cs-message-content table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  max-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #ffffff;
+  border: 1px solid #dce8e0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 12px 0 16px;
+}
+
+.cs-message-content th,
+.cs-message-content td {
+  padding: 10px 12px;
+  border-right: 1px solid #e1eae4;
+  border-bottom: 1px solid #e1eae4;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.cs-message-content th {
+  background: #e7f5ec;
+  color: #145b39;
+  font-weight: 750;
+}
+
+.cs-message-content tr:nth-child(even) td {
+  background: #f7fbf8;
+}
+
+.cs-message-content tr:last-child td {
+  border-bottom: 0;
+}
+
+.cs-message-content th:last-child,
+.cs-message-content td:last-child {
+  border-right: 0;
+}
+
+.cs-message-content table + p {
+  margin-top: 12px;
+}
+
+.cs-message-content p {
+  margin: 6px 0;
+}
+
       `}
       </style>
     </div>
@@ -3357,7 +3481,181 @@ function InsightStats({ insights }) {
   );
 }
 
+
+function normalizeAIInventoryText(content) {
+  return String(content || "")
+    // Handle Markdown escaped once or several times, plus HTML entities sometimes
+    // introduced when an answer is stored or returned from the API.
+    .replace(/\\+/g, "")
+    .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+    .replace(/&#124;|&vert;/gi, "|")
+    .replace(/&amp;/gi, "&")
+    .replace(/\r\n?/g, "\n");
+}
+
+function extractProductsFromMarkdown(content) {
+  if (typeof content !== "string" || !content.includes("|")) return [];
+
+  const lines = normalizeAIInventoryText(content).split("\n");
+  const splitCells = (line) => line.trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim().replace(/^\*\*(.*?)\*\*$/, "$1"));
+  const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const numberValue = (value) => {
+    const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const isDivider = (line) => {
+    const cells = splitCells(line);
+    return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, "")));
+  };
+
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    if (!lines[i].includes("|") || !isDivider(lines[i + 1])) continue;
+
+    const headers = splitCells(lines[i]).map(normalize);
+    const indexOf = (...names) => headers.findIndex((header) => names.includes(header));
+    const nameIndex = indexOf("productname", "product", "name", "itemname");
+    const categoryIndex = indexOf("category", "type");
+    if (nameIndex < 0 || categoryIndex < 0) continue;
+
+    const codeIndex = indexOf("code", "productcode", "sku", "itemcode");
+    const sizeIndex = indexOf("size", "productsize");
+    const colorIndex = indexOf("color", "colour");
+    const quantityIndex = indexOf("quantity", "stock", "units", "qty");
+    const costIndex = indexOf("costprice", "cost");
+    const sellingIndex = indexOf("sellingprice", "price", "unitprice");
+    const rows = [];
+
+    for (let rowIndex = i + 2; rowIndex < lines.length; rowIndex += 1) {
+      const line = lines[rowIndex].trim();
+      if (!line.includes("|")) break;
+      const cells = splitCells(line);
+      if (cells.length < headers.length) continue;
+      const get = (index) => index >= 0 ? cells[index] || "" : "";
+      const name = get(nameIndex).replace(/^\*\*(.*?)\*\*$/, "$1").trim();
+      if (!name || /^[-:]+$/.test(name)) continue;
+      rows.push({
+        name,
+        code: get(codeIndex),
+        category: get(categoryIndex),
+        size: get(sizeIndex),
+        color: get(colorIndex),
+        quantity: numberValue(get(quantityIndex)),
+        costPrice: numberValue(get(costIndex)),
+        sellingPrice: numberValue(get(sellingIndex)),
+      });
+    }
+    if (rows.length) return rows;
+  }
+  return [];
+}
+
+// Product inventory tables are shown in the structured Inventory Results panel,
+// never as raw pipe-delimited text in the conversation bubble. This detector does
+// not depend on successful product extraction, so it can still remove the clutter.
+function removeProductTableFromResponse(content) {
+  if (typeof content !== "string") return "";
+  const lines = normalizeAIInventoryText(content).split("\n");
+  const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cellsFor = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => normalize(cell.trim()));
+  const isDivider = (line) => {
+    const cells = line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+    return cells.length > 1 && cells.every((cell) => /^\s*:?-{3,}:?\s*$/.test(cell));
+  };
+  const isProductHeader = (line) => {
+    if (!line.includes("|")) return false;
+    const cells = cellsFor(line);
+    const hasProduct = cells.some((cell) => ["productname", "product", "name", "itemname"].includes(cell));
+    const hasCategory = cells.some((cell) => ["category", "type"].includes(cell));
+    const hasStockField = cells.some((cell) => ["quantity", "stock", "qty"].includes(cell));
+    return hasProduct && hasCategory && hasStockField;
+  };
+
+  const kept = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (isProductHeader(lines[i])) {
+      // Skip the header, optional separator row, and all subsequent pipe-delimited
+      // rows. The header is a strong signal, so we do not require extraction first.
+      i += 1;
+      if (i < lines.length && isDivider(lines[i])) i += 1;
+      while (i < lines.length && lines[i].trim().includes("|") && lines[i].trim().length > 1) i += 1;
+      i -= 1;
+      continue;
+    }
+    kept.push(lines[i]);
+  }
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function cleanAIResponse(content) {
+  if (typeof content !== "string") return "";
+
+  // The API/history may contain Markdown that has been escaped more than once
+  // (for example \\##, \\*\\*bold\\*\\*, and \\| table cells). Remove one or
+  // more escape slashes before Markdown syntax so ReactMarkdown can parse it.
+  // Decode entities such as &#x20; that sometimes arrive in saved AI responses.
+  const normalizedContent = content
+    .replace(/\\+([#*|_~`])/g, "$1")
+    .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+    .replace(/\r\n?/g, "\n");
+
+  // GFM tables must be separated from adjacent paragraphs by blank lines.
+  const lines = normalizedContent.split("\n");
+
+  const isTableRow = (line) => {
+    const trimmed = line.trim();
+    return trimmed.includes("|") && trimmed.length > 1;
+  };
+  const isTableDivider = (line) => {
+    const trimmed = line.trim();
+    return (
+      trimmed.includes("|") &&
+      /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(trimmed)
+    );
+  };
+
+  const output = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const nextLine = lines[i + 1] || "";
+    const startsTable = isTableRow(line) && isTableDivider(nextLine);
+
+    if (startsTable && output.length && output[output.length - 1].trim() !== "") {
+      output.push("");
+    }
+
+    output.push(line);
+
+    if (startsTable) {
+      i += 1;
+      output.push(lines[i]);
+
+      // Keep collecting table rows until the first non-table line.
+      while (i + 1 < lines.length && isTableRow(lines[i + 1])) {
+        i += 1;
+        output.push(lines[i]);
+      }
+
+      if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
+        output.push("");
+      }
+    }
+  }
+
+  return output.join("\n");
+}
+
+
 function ProductTable({ products }) {
+  const formatPrice = (value) =>
+    `₱${Number(value ?? 0).toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
   return (
     <div className="cs-table-wrap">
       <table className="cs-table">
@@ -3369,11 +3667,15 @@ function ProductTable({ products }) {
             <th>Size</th>
             <th>Color</th>
             <th>Stock</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
           </tr>
         </thead>
+
         <tbody>
           {products.map((product, index) => {
             const quantity = Number(product.quantity ?? 0);
+
             const stockClass =
               quantity <= 0
                 ? "cs-stock-empty"
@@ -3388,9 +3690,15 @@ function ProductTable({ products }) {
                 <td>{product.category || "—"}</td>
                 <td>{product.size || "—"}</td>
                 <td>{product.color || "—"}</td>
+
                 <td>
-                  <span className={`cs-stock ${stockClass}`}>{quantity}</span>
+                  <span className={`cs-stock ${stockClass}`}>
+                    {quantity}
+                  </span>
                 </td>
+
+                <td>{formatPrice(product.costPrice)}</td>
+                <td>{formatPrice(product.sellingPrice)}</td>
               </tr>
             );
           })}
@@ -3398,6 +3706,7 @@ function ProductTable({ products }) {
       </table>
     </div>
   );
-} 
+}
+
 
 export default AI;

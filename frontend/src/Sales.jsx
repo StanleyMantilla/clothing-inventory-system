@@ -1,8 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
-
-const API_URL = "http://localhost:5000";
+import { API_URL } from "./api";
 
 function Sales() {
   const { token } = useAuth();
